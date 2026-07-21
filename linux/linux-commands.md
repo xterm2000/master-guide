@@ -1071,7 +1071,7 @@ sudo tcpdump -i any port 80
 - [`linux/text-processing/grep.md`](text-processing/grep.md) — regex modes (BRE/ERE/
   PCRE), decoding combined flags (`-Evo`), the full `*grep` family — §6 here is just
   the basics
-- [`linux/ssh/passwordless-login.md`](ssh/passwordless-login.md) — the full
+- [`linux/ssh/ssh-key-distribution.md`](ssh/ssh-key-distribution.md), [`passwordless-sudo.md`](ssh/passwordless-sudo.md) — the full
   passwordless-SSH walkthrough §7 here summarizes
 - [`linux/sysadmin/users-groups.md`](sysadmin/users-groups.md) — the three files
   (`/etc/passwd`, `/etc/shadow`, `/etc/group`) behind everything in §8

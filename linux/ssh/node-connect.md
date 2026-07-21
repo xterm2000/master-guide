@@ -84,3 +84,9 @@ fi
 echo "Connecting to $NODE_KEY ($IP)..."
 exec ssh "$IP"
 ```
+
+## See Also
+
+- [`ssh-config.md`](ssh-config.md) — `~/.ssh/config` (`ProxyJump`, `StrictHostKeyChecking`, etc.) to combine with this script
+- [`nodes.env`](nodes.env) — two simpler node-list shapes (plain indexed array, role-keyed associative array) used by the passwordless-login/reboot scripts; this file's own `nodes.env` template above is a third, more specific shape (`<role>-<number>`) built for this connect script
+- [`ssh-key-distribution.md`](ssh-key-distribution.md) — generating/distributing the key this script's `ssh` calls rely on

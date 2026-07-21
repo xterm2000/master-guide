@@ -96,3 +96,12 @@ Host devbox
 - More specific `Host` blocks override `Host *` - order matters, first match wins per parameter.
 - Run `ssh -vvv hostname` to debug which config values are actually being applied.
 - Permissions matter: the file should be `chmod 600 ~/.ssh/config`.
+
+## See Also
+
+This file covers *connection* config (host aliases, jump hosts, keep-alive).
+For key generation/distribution and passwordless sudo, see:
+
+- [`ssh-key-distribution.md`](ssh-key-distribution.md)
+- [`passwordless-sudo.md`](passwordless-sudo.md)
+- [`node-connect.md`](node-connect.md) — this repo's node-map + connect script, which pairs with `ProxyJump`/`Host` blocks defined here
