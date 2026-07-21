@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-v3
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: simple-api
+  template:
+    metadata:
+      labels:
+        app: simple-api
+    spec:
+      containers:
+      - name: s-api-cont
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        livenessProbe:
+          httpGet:
+            path: /health                # The path to check for the liveness probe
+            port: 80               # The port to check on
+          initialDelaySeconds: 15  # Wait this many seconds before starting the probe
+          periodSeconds: 10        # Check the probe every 10 seconds
+        readinessProbe:
+          httpGet:
+            path: /status                # The path to check for the readiness probe
+            port: 80               # The port to check on
+          initialDelaySeconds: 5   # Wait this many seconds before starting the probe
+          periodSeconds: 5         # Check the probe every 5 secondsA
+        volumeMounts:
+        - name: config
+          mountPath: "/etc/nginx/conf.d/default.conf"
+          readOnly: true
+          subPath: default.conf
+      volumes:
+        - name: config
+          configMap:
+            name: nginxv3-config
+

@@ -1,0 +1,36 @@
+# tracegen.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger-tracegen
+  namespace: monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tracegen
+  template:
+    metadata:
+      labels:
+        app: tracegen
+    spec:
+      containers:
+      - name: tracegen
+        image: jaegertracing/jaeger-tracegen:latest
+        args:
+        - -trace-exporter=otlp-http
+        - -duration=0          # run forever
+        - -workers=1
+        - -pause=500ms         # emit every 500ms, easy on the cluster
+        env:
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://jaeger.monitor.svc.cluster.local:4318/v1/traces"
+        - name: OTEL_SERVICE_NAME
+          value: "tracegen-demo"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 50m
+            memory: 32Mi

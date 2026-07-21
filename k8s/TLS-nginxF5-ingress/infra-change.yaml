@@ -1,0 +1,71 @@
+# This file contains the necessary Kubernetes and AWS CloudFormation configurations 
+# to set up TLS for an Nginx Ingress Controller using cert-manager, 
+# as well as the required AWS resources for handling HTTPS traffic.
+
+
+---
+#kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+
+# adjust the virtual server configuration to use the TLS secret created by cert-manager
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
+metadata:
+  name: main-vs
+spec:
+  host: api.example.com
+  tls:
+    secret: app-tls          # cert-manager will create this Secret
+    redirect:
+      enable: true      
+---
+# Define a Certificate resource for cert-manager to obtain a TLS certificate from Let's Encrypt
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: my-cert
+  namespace: default
+spec:
+  secretName:  app-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - api.example.com
+  - example.com      
+--- 
+
+# teplate values indented
+  TGWorkerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${Prefix}-worker-https-tg"
+      Protocol: TCP
+      Port: 30091
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: "30091"
+      TargetGroupAttributes:
+        - Key: preserve_client_ip.enabled
+          Value: "false"
+      Targets:
+        - Id: !Ref WorkerInstance1
+          Port: 30091
+        - Id: !Ref WorkerInstance2
+          Port: 30091
+---
+  ListenerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref NLB
+      Protocol: TCP
+      Port: 443
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TGWorkerHTTPS          
+--- 
+          # SG
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"          

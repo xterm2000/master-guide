@@ -1,0 +1,188 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  app_env: dev
+  region: us_east
+  echo_text: hello babajan
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+stringData:
+  username: power_user
+  password: my-password
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-deployment
+  labels:
+    app: echo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: echo
+  template:
+    metadata:
+      labels:
+        app: echo
+    spec:
+      containers:
+      - name: hashi
+        image: hashicorp/http-echo
+        args:
+        - "-listen=:8080"
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        env:
+        - name: APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: app_env
+        - name: REGION
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: region
+        - name: ECHO_TEXT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: echo_text
+        - name: USER
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: username
+        - name: PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: password
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: echo
+  name: app-deployment-svc
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: echo
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  default.conf: |
+    server {
+      listen 80;
+
+      location /foo {
+        return 200 'hit /foo\n';
+        add_header Content-Type text/plain;
+      }
+
+      location /bar {
+        return 200 'hit /bar\n';
+        add_header Content-Type text/plain;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx2p
+  labels:
+    app: nginx2p
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx2p
+  template:
+    metadata:
+      labels:
+        app: nginx2p
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: nginx2p
+  name: nginx2p-svc
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: nginx2p
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: curl
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: curl
+  namespace: curl
+  labels:
+    app: curl
+spec:
+  selector:
+    matchLabels:
+      app: curl
+  template:
+    metadata:
+      labels:
+        app: curl
+        name: curl
+    spec:
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      containers:
+      - name: curl-pod
+        image: curlimages/curl:latest
+        command: ["sleep", "infinity"]
+        resources:                        # ← good practice
+          requests:
+            cpu: "10m"
+            memory: "16Mi"
+          limits:
+            cpu: "100m"
+            memory: "64Mi"

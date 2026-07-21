@@ -1,0 +1,18 @@
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: calico-system.allow-nginx-to-whisker
+  namespace: calico-system
+spec:
+  tier: calico-system
+  selector: k8s-app == 'whisker'
+  types:
+  - Ingress
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      namespaceSelector: projectcalico.org/name == 'nginx-ingress'
+    destination:
+      ports:
+      - 8081

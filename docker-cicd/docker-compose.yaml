@@ -1,0 +1,240 @@
+# 1. Use .env file 
+# 2. add dind for improved security
+# 3. add pgadmin for easier DB management
+# 4. add traefik for portless access to services
+# 5. add socket proxy for safer Traefik integration
+# profiles: [ci]        # jenkins, dind, nexus
+# profiles: [scm]       # gitea
+# profiles: [db]        # postgres, pgadmin
+# profiles: [tracing]   # jaeger
+# no profile            # traefik — always on
+# --------------------------------------------------
+# docker compose --profile ci up -d       
+# To run everything: docker compose --profile ci --profile scm --profile db --profile tracing up -d
+
+networks:
+  devops_net:
+    driver: bridge
+volumes: 
+  dind-storage:
+
+services:
+  
+  # socket proxy for Traefik 
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy
+    container_name: socket-proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      # set to 1 to allow, 0 to deny
+      CONTAINERS: 1   # Traefik needs this
+      IMAGES:     0   # Jenkins needs this to build
+      BUILD:      0   # Jenkins needs this
+      INFO:       1   # Traefik needs this to route to the right containers
+      NETWORKS:   0   # Traefik doesn't need this
+      EVENTS:     1   # needed for live updates 
+      SERVICES:   0   # swarm mode only
+      TASKS:      0   # swarm mode only
+      NODES:      0   # swarm mode only
+      SWARM:      0   # swarm mode only
+      ### docker api version
+      POST:       0   # keeps it readonly 
+
+
+    restart: unless-stopped
+    networks:
+      - devops_net
+
+  # dind sidecar for Jenkins
+  dind:
+    profiles: [ci]
+    image: docker:dind
+    container_name: dind
+    privileged: true          # DinD requires this — but isolated from host Docker
+    environment:
+      DOCKER_TLS_CERTDIR: ""  # disable TLS for simplicity on home LAN
+    command: [
+      "dockerd", 
+      "--host=tcp://0.0.0.0:2376", 
+      "--insecure-registry=nexus:8082"
+      ]
+    volumes:
+      - dind-storage:/var/lib/docker
+    networks:
+      - devops_net
+    restart: unless-stopped
+  
+  # --- Traefik ---
+  traefik:
+    image: traefik:v3.6.1
+    container_name: traefik
+    depends_on:
+      - socket-proxy
+    ports:
+      - "80:80"
+      - "8888:8080"   # dashboard
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.endpoint=tcp://socket-proxy:2375"
+      - "--entrypoints.web.address=:80"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+    # no socket volume needed — talks to socket-proxy instead
+    networks:
+      - devops_net
+    restart: unless-stopped
+
+  # --- Jenkins ---
+  jenkins:
+    profiles: [ci]    
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    image: jenkins/jenkins:custom
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jenkins.rule=Host(`jenkins.home`)"
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+    container_name: jenkins
+    restart: unless-stopped
+    user: root
+    depends_on: 
+    - dind
+    ports: 
+      - "50000:50000" # Agent communication
+    volumes:
+      - /opt/devops/jenkins/home:/var/jenkins_home      
+    environment:
+      - DOCKER_HOST=tcp://dind:2376
+      - JAVA_OPTS=${JENKINS_JAVA_OPTS:-"-Djenkins.install.runSetupWizard=true"}
+    networks:
+      - devops_net
+
+  # --- Nexus ---
+  nexus:
+    profiles: [ci]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nexus.rule=Host(`nexus.home`)"
+      - "traefik.http.services.nexus.loadbalancer.server.port=8081"  
+    image: sonatype/nexus3:latest
+    container_name: nexus
+    restart: unless-stopped
+    ports:
+      - "8082:8082"   # Docker hosted registry
+      - "8083:8083"   # Docker proxy registry
+    volumes:
+      - /opt/devops/nexus/home:/nexus-data
+    environment:
+      - INSTALL4J_ADD_VM_PARAMS=${NEXUS_JVM_OPTS:-"-Xms1g -Xmx2g -XX:MaxDirectMemorySize=2g"}
+    networks:
+      - devops_net
+  
+  # --- Gitea ---
+  gitea:
+    profiles: [scm]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitea.rule=Host(`gitea.home`)"
+      - "traefik.http.services.gitea.loadbalancer.server.port=3000"  
+    depends_on:
+      - db
+    image: docker.gitea.com/gitea:latest
+    container_name: gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=postgres
+      - GITEA__database__HOST=db:5432
+      - GITEA__database__NAME=gitea
+      - GITEA__database__USER=${GITEA_DB_USER:-gitea}
+      - GITEA__database__PASSWD=${GITEA_DB_PASS:-gitea}
+      - GITEA__webhook__ALLOWED_HOST_LIST=${ALLOWED_WEBHOOK_HOST}  # ← add this
+    restart: unless-stopped
+    networks:
+      - devops_net
+    volumes:
+      - /opt/devops/gitea/data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "222:22" ## https - requires token 
+
+  # --- Postgres ---
+  db:
+    profiles: [db]
+    image: docker.io/library/postgres:14
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    networks:
+      - devops_net
+    ports:
+      - "5432:5432"
+    volumes:
+      - /opt/devops/postgres/data:/var/lib/postgresql/data # data
+      - /opt/devops/postgres/initdb:/docker-entrypoint-initdb.d # init scripts 
+
+  # --- pgAdmin ---
+  pgadmin:
+    profiles: [db]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.home`)"
+      - "traefik.http.services.pgadmin.loadbalancer.server.port=80"  
+    depends_on:
+      - db
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
+    volumes:
+      - /opt/devops/pgadmin/data:/var/lib/pgadmin
+    networks:
+      - devops_net
+
+  # default homepage - fallback for Traefik
+  homepage:
+    image: busybox:latest
+    container_name: homepage
+    command: httpd -f -p 80 -h /www
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homepage.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.homepage.entrypoints=web"
+      - "traefik.http.routers.homepage.priority=1"
+      - "traefik.http.services.homepage.loadbalancer.server.port=80"
+    volumes:
+      - ./homepage:/www:ro
+    networks:
+      - devops_net
+    restart: unless-stopped      
+
+  # --- Jaeger for tracing ---
+  jaeger:
+    profiles: [tracing]
+    networks:
+      - devops_net
+    image: jaegertracing/all-in-one:1.57
+    container_name: jaeger
+    environment:
+      # Opens a Zipkin-compatible HTTP collector on port 9411.
+      # Without this, Jaeger only listens for its own native format.
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    ports:
+      - "16686:16686"   # Jaeger web UI
+      - "9411:9411"     # Zipkin-compatible span ingestion
+    mem_limit: 512m
+    cpus: "0.5"
+    restart: unless-stopped
+ 
+
+ 
+    

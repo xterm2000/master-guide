@@ -1,0 +1,17 @@
+# jaeger-vs.yaml
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
+metadata:
+  name: jaeger-vs
+  namespace: monitor
+spec:
+  host: jaeger.example.com        # change to your actual hostname
+  upstreams:
+  - name: jaeger-ui
+    service: jaeger
+    port: 16686
+  routes:
+  - path: /jaeger
+    action:
+      pass: jaeger-ui
+---

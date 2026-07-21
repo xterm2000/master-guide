@@ -1,0 +1,42 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: nginx
+  namespace: lab
+spec:
+  entryPoints:
+  - web
+  routes:
+  - kind: Rule
+    match: PathPrefix(`/hashi`)
+    services:
+    - name: app-deployment-svc
+      port: 80
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-nginx2p
+  namespace: lab
+spec:
+  stripPrefix:
+    prefixes:
+      - /nginx2p
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: nginx2p
+  namespace: lab
+spec:
+  entryPoints:
+  - web
+  routes:
+  - kind: Rule
+    match: PathPrefix(`/nginx2p`)
+    middlewares:
+    - name: strip-nginx2p
+    services:
+    - name: nginx2p-svc
+      port: 80

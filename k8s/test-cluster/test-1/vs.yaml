@@ -1,0 +1,43 @@
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
+metadata:
+  name: myapp-vs
+spec:
+  host: api.example.com
+  tls:
+    secret: myapp-tls
+    redirect:
+      enable: true
+  upstreams:
+  - name: nginx-api
+    service: nginx3-svc
+    port: 80
+  - name: hashi
+    service: hashi-svc
+    port: 80
+  routes:
+  - path: /test-route          # ← add this
+    action:
+      pass: nginx-api
+  - path: /api/
+    action:
+      proxy:
+        upstream: nginx-api
+        rewritePath: /
+  - path: /hashi
+    action:
+      pass: hashi
+  - path: =/
+    action:
+      redirect:
+        url: https://api.example.com/test-route
+        code: 301
+  - path: /
+    action:
+      return:
+        code: 404
+        body: '{\"error\": \"not found\"}' 
+        type: application/json
+        headers:
+        - name: path
+          value: wrong

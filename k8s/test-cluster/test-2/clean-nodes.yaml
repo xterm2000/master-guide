@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: image-cleanup
+spec:
+  selector:
+    matchLabels:
+      app: image-cleanup
+  template:
+    metadata:
+      labels:
+        app: image-cleanup
+    spec:
+      tolerations:
+      - operator: "Exists"
+      hostPID: true
+      containers:
+        - name: cleanup
+          image: alpine
+          env:
+          - name: CONTAINER_RUNTIME_ENDPOINT
+            value: unix:///run/containerd/containerd.sock
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          command:
+          - /bin/sh
+          - -c
+          - |
+            echo "======================================="
+            echo "Starting image cleanup on $(NODE_NAME)..."
+            echo "Images before cleanup:"
+            /host/usr/local/bin/crictl images 2>/dev/null
+
+            
+            echo "Running prune..."
+            /host/usr/local/bin/crictl rmi --prune 2>/dev/null
+
+            echo "Images after cleanup:"
+            /host/usr/local/bin/crictl images 2>/dev/null
+
+            echo "Done."
+
+            sleep infinity
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: cri-sock
+              mountPath: /run/containerd/containerd.sock
+            - name: host-bin
+              mountPath: /host/usr/local/bin
+              readOnly: true
+      volumes:
+        - name: cri-sock
+          hostPath:
+            path: /run/containerd/containerd.sock
+        - name: host-bin
+          hostPath:
+            path: /usr/local/bin              

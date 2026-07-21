@@ -1,0 +1,19 @@
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
+metadata:
+  name: whisker-vs
+  namespace: calico-system
+spec:
+  host: whisker.mydomain.com
+  tls:
+    redirect:
+      enable: true
+    secret: route53
+  upstreams:
+  - name: whisker
+    service: whisker
+    port: 8081
+  routes:
+  - path: /
+    action:
+      pass: whisker

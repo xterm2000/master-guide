@@ -1,0 +1,734 @@
+﻿AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Fully Automated Kubernetes Lab Cluster - Rocky Linux 9
+  Nodes: 1x Bastion (t3.medium, public subnet), 1x Control Plane (t3.medium, private subnet), 1x Worker (t3.small, private subnet)
+  Networking: Public subnet (Bastion + NLB), Private subnet (CP + Worker), NAT Gateway for outbound
+  Extras: NLB with :80 → Worker and :6443 → Control Plane
+  Automation: Scheduled shutdown Lambda (stop instances + delete NAT + release EIP), on-demand startup Lambda
+
+# ---------------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------------
+Parameters:
+
+  # -- General ---------------------------------------------------------------
+  Prefix:
+    Type: String
+    Default: "k8s-lab"
+    Description: "Name prefix applied to every resource"
+
+  ClusterName:
+    Type: String
+    Default: "cluster-1"
+    Description: "Cluster identifier applied as a tag to every resource"
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: top-key
+    Description: EC2 Key Pair for SSH access
+
+  # -- Networking ------------------------------------------------------------
+  VpcCidr:
+    Type: String
+    Default: "10.0.0.0/16"
+
+  PublicSubnetCidr:
+    Type: String
+    Default: "10.0.1.0/24"
+
+  PrivateSubnetCidr:
+    Type: String
+    Default: "10.0.2.0/24"
+
+  # -- Instance types --------------------------------------------------------
+  BastionInstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.small, t3.medium, t3.large, t3.xlarge]
+
+  ControlPlaneInstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues: [t3.small, t3.medium, t3.large, t3.xlarge]
+
+  WorkerInstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.small, t3.medium, t3.large, t3.xlarge]
+
+  # -- Storage sizes (GiB) ---------------------------------------------------
+  BastionDiskSize:
+    Type: Number
+    Default: 10
+    MinValue: 8
+
+  ControlPlaneDiskSize:
+    Type: Number
+    Default: 15
+    MinValue: 8
+
+  WorkerDiskSize:
+    Type: Number
+    Default: 15
+    MinValue: 8
+  
+  CronTimezone:
+    Type: String
+    Default: "UTC-4"
+    Description: Timezone for EventBridge cron schedule (e.g. UTC, UTC-4, UTC+2)
+    AllowedValues:
+      - "UTC"
+      - "UTC-4"
+      - "UTC+3"
+
+  # -- Automation ------------------------------------------------------------
+  ShutdownCron:
+    Type: String
+    Default: "cron(0 20 * * ? *)"
+    Description: >
+      EventBridge cron expression for cluster shutdown (UTC).
+      Format: cron(Minutes Hours DayOfMonth Month DayOfWeek Year)
+        Minutes    : 0-59
+        Hours      : 0-23 (UTC)
+        DayOfMonth : 1-31 or * (any) - use ? when DayOfWeek is set
+        Month      : 1-12 or * (any)
+        DayOfWeek  : MON-SUN or * (any) - use ? when DayOfMonth is set
+        Year       : 4-digit year or * (any)
+      Example: cron(0 20 ? * MON-FRI *) = every weekday at 20:00 
+    AllowedValues:
+      - "cron(0 18 * * ? *)"       # 18:00 UTC - 6 PM
+      - "cron(0 20 * * ? *)"       # 20:00 UTC - 8 PM
+      - "cron(0 22 * * ? *)"       # 22:00 UTC - 10 PM
+      - "cron(0 0 * * ? *)"        # 00:00 UTC - midnight
+      - "cron(0 20 ? * MON-FRI *)" # 20:00 UTC - weekdays only
+
+# ---------------------------------------------------------------------------
+# Mappings
+# ---------------------------------------------------------------------------
+Mappings:
+  Config:
+    AMI:
+      RockyLinux9: "ami-0f2425d4cce4e97dd"
+
+# ---------------------------------------------------------------------------
+# Resources
+# ---------------------------------------------------------------------------
+Resources:
+
+  # -- VPC -------------------------------------------------------------------
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-vpc"
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-igw"
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # -- Public Subnet (Bastion + NLB) -----------------------------------------
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetCidr
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-public-subnet"
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-public-rt"
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # -- NAT Gateway (outbound for private subnet) -----------------------------
+
+  NatEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-nat-eip"
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-nat"
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  # -- Private Subnet (Control Plane + Worker) -------------------------------
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetCidr
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-private-subnet"
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-private-rt"
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  # -- Security Group (all nodes) --------------------------------------------
+
+  ClusterSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: K8s cluster - all nodes
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        # SSH from anywhere (bastion is the only node with a public IP)
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: "0.0.0.0/0"
+        # kube-apiserver
+        - IpProtocol: tcp
+          FromPort: 6443
+          ToPort: 6443
+          CidrIp: !Ref VpcCidr
+        # etcd
+        - IpProtocol: tcp
+          FromPort: 2379
+          ToPort: 2380
+          CidrIp: !Ref PrivateSubnetCidr
+        # kubelet
+        - IpProtocol: tcp
+          FromPort: 10250
+          ToPort: 10250
+          CidrIp: !Ref PrivateSubnetCidr
+        # NodePort range
+        - IpProtocol: tcp
+          FromPort: 30000
+          ToPort: 32767
+          CidrIp: !Ref VpcCidr
+        # CNI overlay (Calico VXLAN)
+        - IpProtocol: udp
+          FromPort: 4789
+          ToPort: 4789
+          CidrIp: !Ref PrivateSubnetCidr
+        # ICMP within VPC
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref VpcCidr
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-cluster-sg"
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  # -- EC2 Instances ---------------------------------------------------------
+
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref BastionInstanceType
+      ImageId: !FindInMap [Config, AMI, RockyLinux9]
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref ClusterSG
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref BastionDiskSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-bastion"
+        - Key: Role
+          Value: bastion
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  ControlPlaneInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref ControlPlaneInstanceType
+      ImageId: !FindInMap [Config, AMI, RockyLinux9]
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref ClusterSG
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref ControlPlaneDiskSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-control-plane"
+        - Key: Role
+          Value: control-plane
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  WorkerInstance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref WorkerInstanceType
+      ImageId: !FindInMap [Config, AMI, RockyLinux9]
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref ClusterSG
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref WorkerDiskSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-worker-1"
+        - Key: Role
+          Value: worker
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  WorkerInstance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref WorkerInstanceType
+      ImageId: !FindInMap [Config, AMI, RockyLinux9]
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref ClusterSG
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref WorkerDiskSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-worker-2"
+        - Key: Role
+          Value: worker
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  # -- Network Load Balancer -------------------------------------------------
+
+  NLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${Prefix}-nlb"
+      Type: network
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-nlb"
+        - Key: ClusterName
+          Value: !Ref ClusterName
+
+  # Target group: Worker :80
+  TGWorkerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${Prefix}-worker-http-tg"
+      Protocol: TCP
+      Port: 30080
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: "30080"
+      TargetGroupAttributes:
+        - Key: preserve_client_ip.enabled
+          Value: "false"
+      Targets:
+        - Id: !Ref WorkerInstance1
+          Port: 30080
+        - Id: !Ref WorkerInstance2
+          Port: 30080
+
+  ListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref NLB
+      Protocol: TCP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TGWorkerHTTP
+
+  # Target group: Control Plane :6443
+  TGControlPlaneAPI:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${Prefix}-cp-api-tg"
+      Protocol: TCP
+      Port: 6443
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: "6443"
+      Targets:
+        - Id: !Ref ControlPlaneInstance
+          Port: 6443
+
+  ListenerAPI:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref NLB
+      Protocol: TCP
+      Port: 6443
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TGControlPlaneAPI
+
+  # -- Automation: Shared IAM Role -------------------------------------------
+
+  ClusterLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Prefix}-cluster-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ClusterPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:StopInstances
+                  - ec2:StartInstances
+                  - ec2:DeleteNatGateway
+                  - ec2:CreateNatGateway
+                  - ec2:DescribeNatGateways
+                  - ec2:AllocateAddress
+                  - ec2:ReleaseAddress
+                  - ec2:CreateTags
+                  - ec2:CreateRoute
+                  - ec2:ReplaceRoute
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  # -- Automation: Shutdown Lambda -------------------------------------------
+
+  ShutdownLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Prefix}-shutdown"
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 900
+      Role: !GetAtt ClusterLambdaRole.Arn
+      Environment:
+        Variables:
+          INSTANCE_IDS: !Sub "${BastionInstance},${ControlPlaneInstance},${WorkerInstance1},${WorkerInstance2}"
+          PUBLIC_SUBNET_ID: !Ref PublicSubnet
+      Code:
+        ZipFile: |
+          import boto3, os, time
+
+          def handler(event, context):
+              ec2 = boto3.client('ec2')
+
+              # Stop instances
+              ids = os.environ['INSTANCE_IDS'].split(',')
+              ec2.stop_instances(InstanceIds=ids)
+              print(f"Stopping: {ids}")
+
+              # Discover the active NAT Gateway in the subnet dynamically
+              nats = ec2.describe_nat_gateways(
+                  Filters=[
+                      {'Name': 'subnet-id', 'Values': [os.environ['PUBLIC_SUBNET_ID']]},
+                      {'Name': 'state',     'Values': ['available', 'pending']}
+                  ]
+              )['NatGateways']
+              if not nats:
+                  print("No active NAT Gateway found - nothing to delete")
+                  return
+              nat = nats[0]['NatGatewayId']
+              alloc = nats[0]['NatGatewayAddresses'][0]['AllocationId']
+              print(f"Found NAT: {nat}, EIP alloc: {alloc}")
+
+              # Delete NAT Gateway
+              ec2.delete_nat_gateway(NatGatewayId=nat)
+              print(f"Deleting NAT: {nat}")
+
+              # Wait for NAT deleted (up to ~10 min)
+              for _ in range(90):
+                  state = ec2.describe_nat_gateways(
+                      NatGatewayIds=[nat]
+                  )['NatGateways'][0]['State']
+                  if state == 'deleted':
+                      break
+                  time.sleep(10)
+
+              # Release EIP
+              ec2.release_address(AllocationId=alloc)
+              print(f"Released EIP: {alloc}")
+
+  # -- Automation: Startup Lambda --------------------------------------------
+
+  StartupLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${Prefix}-startup"
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 900
+      Role: !GetAtt ClusterLambdaRole.Arn
+      Environment:
+        Variables:
+          INSTANCE_IDS: !Sub "${BastionInstance},${ControlPlaneInstance},${WorkerInstance1},${WorkerInstance2}"
+          PUBLIC_SUBNET_ID: !Ref PublicSubnet
+          PRIVATE_RTB_ID: !Ref PrivateRouteTable
+          PREFIX: !Ref Prefix
+      Code:
+        ZipFile: |
+          import boto3, os, time
+
+          def handler(event, context):
+              ec2 = boto3.client('ec2')
+              subnet_id = os.environ['PUBLIC_SUBNET_ID']
+
+              # Check for existing NAT Gateway in the subnet (available or pending)
+              existing = ec2.describe_nat_gateways(
+                  Filters=[
+                      {'Name': 'subnet-id', 'Values': [subnet_id]},
+                      {'Name': 'state',     'Values': ['available', 'pending']}
+                  ]
+              )['NatGateways']
+
+              if existing:
+                  nat_id = existing[0]['NatGatewayId']
+                  print(f"NAT Gateway already exists: {nat_id} - skipping create")
+              else:
+                  # Allocate EIP
+                  eip = ec2.allocate_address(
+                      Domain='vpc',
+                      TagSpecifications=[{
+                          'ResourceType': 'elastic-ip',
+                          'Tags': [{'Key': 'Name', 'Value': os.environ['PREFIX'] + '-nat-eip'}]
+                      }]
+                  )
+                  alloc_id = eip['AllocationId']
+                  print(f"Allocated EIP: {alloc_id}")
+
+                  # Create NAT Gateway
+                  nat = ec2.create_nat_gateway(
+                      SubnetId=subnet_id,
+                      AllocationId=alloc_id,
+                      TagSpecifications=[{
+                          'ResourceType': 'natgateway',
+                          'Tags': [{'Key': 'Name', 'Value': os.environ['PREFIX'] + '-nat'}]
+                      }]
+                  )
+                  nat_id = nat['NatGateway']['NatGatewayId']
+                  print(f"Creating NAT Gateway: {nat_id}")
+
+                  # Wait for NAT available (up to ~5 min)
+                  for _ in range(90):
+                      state = ec2.describe_nat_gateways(
+                          NatGatewayIds=[nat_id]
+                      )['NatGateways'][0]['State']
+                      if state == 'available':
+                          break
+                      time.sleep(10)
+
+              # Update private route table default route
+              rtb = os.environ['PRIVATE_RTB_ID']
+              try:
+                  ec2.replace_route(
+                      RouteTableId=rtb,
+                      DestinationCidrBlock='0.0.0.0/0',
+                      NatGatewayId=nat_id
+                  )
+              except Exception:
+                  ec2.create_route(
+                      RouteTableId=rtb,
+                      DestinationCidrBlock='0.0.0.0/0',
+                      NatGatewayId=nat_id
+                  )
+              print(f"Updated route table: {rtb}")
+
+              # Start instances
+              ids = os.environ['INSTANCE_IDS'].split(',')
+              ec2.start_instances(InstanceIds=ids)
+              print(f"Starting: {ids}")
+
+  # -- Automation: EventBridge Scheduler ------------------------------------
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${Prefix}-scheduler-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ShutdownLambda.Arn
+                  - !GetAtt StartupLambda.Arn
+
+  ShutdownScheduler:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "${Prefix}-shutdown"
+      ScheduleExpression: !Ref ShutdownCron
+      ScheduleExpressionTimezone: !Ref CronTimezone
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt ShutdownLambda.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+
+# ---------------------------------------------------------------------------
+# Outputs
+# ---------------------------------------------------------------------------
+Outputs:
+
+  ClusterName:
+    Description: Cluster name (from parameter)
+    Value: !Ref ClusterName
+
+  BastionPublicIP:    
+    Description: Bastion public IP (SSH entry point)
+    Value: !GetAtt BastionInstance.PublicIp
+
+  ControlPlanePrivateIP:     
+    Description: Control Plane private IP (reachable via bastion)
+    Value: !GetAtt ControlPlaneInstance.PrivateIp
+
+  Worker1PrivateIP:    
+    Description: Worker-1 private IP (reachable via bastion)
+    Value: !GetAtt WorkerInstance1.PrivateIp
+
+  Worker2PrivateIP:    
+    Description: Worker-2 private IP (reachable via bastion)
+    Value: !GetAtt WorkerInstance2.PrivateIp
+
+  APIEndpoint:    
+    Description: Kubernetes API endpoint
+    Value: !Sub "https://${NLB.DNSName}:6443"
+
+  NLBDnsName:    
+    Description: NLB DNS name
+    Value: !GetAtt NLB.DNSName
+  
+  WebEndpoint:    
+    Description: Example web endpoint (NLB :80 → Worker)
+    Value: !Sub "http://${NLB.DNSName}:80"
+
+  ShutdownLambdaName:    
+    Description: Invoke to shut down the cluster on demand
+    Value: !Ref ShutdownLambda
+
+  StartupLambdaName:
+    Description: Invoke to start the cluster on demand
+    Value: !Ref StartupLambda
+
+  CronExpression:
+    Description: EventBridge cron expression for scheduled shutdown
+    Value: !Ref ShutdownCron
+
+  CronTimezone:
+    Description: Timezone for EventBridge cron schedule
+    Value: !Ref CronTimezone
+    

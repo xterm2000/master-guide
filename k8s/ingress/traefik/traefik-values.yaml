@@ -1,0 +1,16 @@
+# traefik-values.yaml
+deployment:
+  kind: DaemonSet
+
+service:
+  type: ClusterIP
+
+ports:
+  web:
+    port: 8000
+    exposedPort: 80
+    hostPort: 80
+  websecure:
+    port: 8443
+    exposedPort: 443
+    hostPort: 443

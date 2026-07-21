@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: my-letsencrypt-cert
+  labels:
+    purpose: tls-approval 
+spec:
+  secretName: route53
+  issuerRef:
+    name: letsencrypt-aws 
+    kind: ClusterIssuer
+  dnsNames:
+  - mydomain.com              # bare domain included
+  - '*.mydomain.com'

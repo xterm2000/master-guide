@@ -1,0 +1,17 @@
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServerRoute
+metadata:
+  name: calico-vsr
+  namespace: calico-system
+spec:
+  host: api.mydomain.com
+  upstreams:
+  - name: whisker
+    service: whisker
+    port: 8081
+  subroutes:
+  - path: /whisker
+    action: 
+      proxy:
+        upstream: whisker
+        rewritePath: ""

@@ -1,0 +1,35 @@
+## Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-web
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: simple-web
+  template:
+    metadata:
+      labels:
+        app: simple-web
+    spec:
+      containers:
+        - name: simple-web
+          image: yeasy/simple-web:latest
+          ports:
+            - containerPort: 80
+
+---
+
+## Service
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-web-svc
+spec:
+  selector:
+    app: simple-web
+  ports:
+    - port: 80
+      targetPort: 80

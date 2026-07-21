@@ -1,0 +1,55 @@
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
+metadata:
+  name: dev-vs
+spec:
+  host: dev.mydomain.com
+  tls:
+    redirect:
+      enable: true
+    secret: route53
+
+  upstreams:
+  - name: api-backend
+    service: mock-api-svc
+    port: 8080
+  - name: simple-web
+    service: simple-web-svc
+    port: 80
+
+  routes:
+  - path: =/api
+    action:
+      proxy:
+        upstream: api-backend
+        rewritePath: /
+
+  - path: =/sw
+    action:
+      proxy:
+        upstream: simple-web
+        rewritePath: /
+
+  - path: =/reroute 
+    action: 
+      return:
+        code: 200
+        type: text/plain
+        headers:
+        - name: Source
+          value: nginx
+        - name: X-Captured-Uri
+          value: ${request_uri}        
+        body: "Hello, world! ${request_uri} ${remote_addr}"
+
+  - path: /
+    action: 
+      return:
+        code: 403
+        type: text/plain
+        headers:
+        - name: Source
+          value: nginx
+        - name: X-Captured-Uri
+          value: ${request_uri}        
+        body: "Forbidden ${request_uri} ${remote_addr}\n use/api or /sw or /reroute\n"          

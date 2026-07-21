@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: hashi
+  name: hashi
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: hashi
+  template:
+    metadata:
+      labels:
+        app: hashi
+    spec:
+      containers:
+      - image: hashicorp/http-echo
+        name: echo
+        args: 
+        - "-text={\"status\":\"мицка крабацицка\"}"
+        - "-listen=:8080"
+
+        ports:
+        - containerPort: 8080

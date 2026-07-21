@@ -1,0 +1,4 @@
+top-key.pem
+aws/keys/
+.claude
+*.key

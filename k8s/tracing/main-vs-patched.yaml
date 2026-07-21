@@ -1,0 +1,58 @@
+# vs-patched.yaml
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
+metadata:
+  name: example-vs
+  namespace: default
+spec:
+  host: api.example.com
+  tls:
+    redirect:
+      enable: true
+    secret: example-tls
+  upstreams:
+  - name: nginx-api
+    port: 80
+    service: nginx3-svc
+  - name: hashi
+    port: 80
+    service: hashi-svc
+  - name: jaeger-ui                          # ← new
+    port: 16686vim 
+    service: jaeger-proxy                    # ← points to ExternalName svc
+  routes:
+  - action:
+      pass: nginx-api
+    path: /chimichanga
+  - action:
+      proxy:
+        rewritePath: /
+        upstream: nginx-api
+    path: /api/
+  - action:
+      pass: hashi
+    path: /hashi
+  - action:                              # ← new: proxy /jaeger/ to Jaeger UI
+      proxy:
+        rewritePath: /jaeger/
+        upstream: jaeger-ui
+    path: /jaeger/
+  - action:                              # ← new: redirect /jaeger to /jaeger/
+      redirect:
+        code: 301
+        url: https://api.example.com/jaeger/
+    path: /jaeger
+  - action:
+      redirect:
+        code: 301
+        url: https://api.example.com/chimichanga
+    path: =/
+  - action:
+      return:
+        body: '{\"error\": \"not found\"}'
+        code: 404
+        headers:
+        - name: path
+          value: wrong
+        type: application/json
+    path: /

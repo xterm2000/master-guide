@@ -1,0 +1,400 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Simple Kubernetes Lab Cluster - Rocky Linux 9
+  Nodes: 1x Bastion (t3.medium, public subnet), 1x Control Plane (t3.medium, private subnet), 1x Worker (t3.small, private subnet)
+  Networking: Public subnet (Bastion + NLB), Private subnet (CP + Worker), NAT Gateway for outbound
+  Extras: NLB with :80 → Worker and :6443 → Control Plane
+
+# ---------------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------------
+Parameters:
+
+  # -- General ---------------------------------------------------------------
+  Prefix:
+    Type: String
+    Default: "k8s-lab"
+    Description: "Name prefix applied to every resource"
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: top-key
+    Description: EC2 Key Pair for SSH access
+
+  # -- Networking ------------------------------------------------------------
+  VpcCidr:
+    Type: String
+    Default: "10.0.0.0/16"
+
+  PublicSubnetCidr:
+    Type: String
+    Default: "10.0.1.0/24"
+
+  PrivateSubnetCidr:
+    Type: String
+    Default: "10.0.2.0/24"
+
+  # -- Instance types --------------------------------------------------------
+  BastionInstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues: [t3.small, t3.medium, t3.large, t3.xlarge]
+
+  ControlPlaneInstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues: [t3.small, t3.medium, t3.large, t3.xlarge]
+
+  WorkerInstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.small, t3.medium, t3.large, t3.xlarge]
+
+  # -- Storage sizes (GiB) ---------------------------------------------------
+  BastionDiskSize:
+    Type: Number
+    Default: 10
+    MinValue: 8
+
+  ControlPlaneDiskSize:
+    Type: Number
+    Default: 15
+    MinValue: 8
+
+  WorkerDiskSize:
+    Type: Number
+    Default: 15
+    MinValue: 8
+
+# ---------------------------------------------------------------------------
+# Mappings
+# ---------------------------------------------------------------------------
+Mappings:
+  Config:
+    AMI:
+      RockyLinux9: "ami-0f2425d4cce4e97dd"
+
+# ---------------------------------------------------------------------------
+# Resources
+# ---------------------------------------------------------------------------
+Resources:
+
+  # -- VPC -------------------------------------------------------------------
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-vpc"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-igw"
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # -- Public Subnet (Bastion + NLB) -----------------------------------------
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetCidr
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-public-subnet"
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-public-rt"
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # -- NAT Gateway (outbound for private subnet) -----------------------------
+
+  NatEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-nat-eip"
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-nat"
+
+  # -- Private Subnet (Control Plane + Worker) -------------------------------
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetCidr
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-private-subnet"
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-private-rt"
+
+  PrivateDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  # -- Security Group (all nodes) --------------------------------------------
+
+  ClusterSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: K8s cluster - all nodes
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        # SSH from anywhere (bastion is the only node with a public IP)
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: "0.0.0.0/0"
+        # kube-apiserver
+        - IpProtocol: tcp
+          FromPort: 6443
+          ToPort: 6443
+          CidrIp: !Ref VpcCidr
+        # etcd
+        - IpProtocol: tcp
+          FromPort: 2379
+          ToPort: 2380
+          CidrIp: !Ref PrivateSubnetCidr
+        # kubelet
+        - IpProtocol: tcp
+          FromPort: 10250
+          ToPort: 10250
+          CidrIp: !Ref PrivateSubnetCidr
+        # HTTP - open to internet (NLB preserves client source IP)
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+        # NodePort range
+        - IpProtocol: tcp
+          FromPort: 30000
+          ToPort: 32767
+          CidrIp: !Ref VpcCidr
+        # CNI overlay (flannel VXLAN)
+        - IpProtocol: udp
+          FromPort: 8472
+          ToPort: 8472
+          CidrIp: !Ref PrivateSubnetCidr
+        # ICMP within private subnet
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref VpcCidr    
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-cluster-sg"
+
+  # -- EC2 Instances ---------------------------------------------------------
+
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref BastionInstanceType
+      ImageId: !FindInMap [Config, AMI, RockyLinux9]
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PublicSubnet          # public subnet → gets public IP
+      SecurityGroupIds:
+        - !Ref ClusterSG
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref BastionDiskSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-bastion"
+        - Key: Role
+          Value: bastion
+
+  ControlPlaneInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref ControlPlaneInstanceType
+      ImageId: !FindInMap [Config, AMI, RockyLinux9]
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PrivateSubnet         # private subnet → no public IP
+      SecurityGroupIds:
+        - !Ref ClusterSG
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref ControlPlaneDiskSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-control-plane"
+        - Key: Role
+          Value: control-plane
+
+  WorkerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref WorkerInstanceType
+      ImageId: !FindInMap [Config, AMI, RockyLinux9]
+      KeyName: !Ref KeyName
+      SubnetId: !Ref PrivateSubnet         # private subnet → no public IP
+      SecurityGroupIds:
+        - !Ref ClusterSG
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: !Ref WorkerDiskSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-worker"
+        - Key: Role
+          Value: worker
+
+  # -- Network Load Balancer -------------------------------------------------
+
+  NLB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${Prefix}-nlb"
+      Type: network
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${Prefix}-nlb"
+
+  # Target group: Worker :80
+  TGWorkerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${Prefix}-worker-http-tg"
+      Protocol: TCP
+      Port: 80
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: "80"
+      Targets:
+        - Id: !Ref WorkerInstance
+          Port: 80
+
+  ListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref NLB
+      Protocol: TCP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TGWorkerHTTP
+
+  # Target group: Control Plane :6443
+  TGControlPlaneAPI:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${Prefix}-cp-api-tg"
+      Protocol: TCP
+      Port: 6443
+      VpcId: !Ref VPC
+      TargetType: instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: "6443"
+      Targets:
+        - Id: !Ref ControlPlaneInstance
+          Port: 6443
+
+  ListenerAPI:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref NLB
+      Protocol: TCP
+      Port: 6443
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TGControlPlaneAPI
+
+# ---------------------------------------------------------------------------
+# Outputs
+# ---------------------------------------------------------------------------
+Outputs:
+
+  BastionPublicIP:
+    Description: Bastion public IP (SSH entry point)
+    Value: !GetAtt BastionInstance.PublicIp
+
+  ControlPlanePrivateIP:
+    Description: Control Plane private IP (reachable via bastion)
+    Value: !GetAtt ControlPlaneInstance.PrivateIp
+
+  WorkerPrivateIP:
+    Description: Worker private IP (reachable via bastion)
+    Value: !GetAtt WorkerInstance.PrivateIp
+
+  APIEndpoint:
+    Description: Kubernetes API endpoint
+    Value: !Sub "https://${NLB.DNSName}:6443"
+
+  NLBDnsName:
+    Description: NLB DNS name
+    Value: !GetAtt NLB.DNSName

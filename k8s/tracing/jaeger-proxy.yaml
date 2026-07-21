@@ -1,0 +1,15 @@
+﻿# NOTE: F5 NGINX Ingress Controller (OSS) does NOT support ExternalName services
+# as VirtualServer upstreams - this requires NGINX Plus.
+# Alternative: deploy Jaeger directly in the default namespace, or use
+# jaeger-vs.yaml (jaeger.example.com) which points to jaeger-svc in monitor ns
+# via a dedicated VirtualServer that lives in the monitor namespace.
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-proxy
+  namespace: default
+spec:
+  type: ExternalName
+  externalName: jaeger-svc.monitor.svc.cluster.local
+  ports:
+  - port: 16686

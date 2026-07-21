@@ -1,0 +1,49 @@
+﻿# NOT USED IN PRODUCTION - F5 NGINX IC rejects this Ingress because a VirtualServer
+# already owns the hostname. Routing is handled by vs.yaml (VirtualServer CRD).
+# Kept for reference; see aws/nginxf5-tls/openssl3 - k8s TLS setup.md §4 for why.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-ingress
+  annotations:
+    nginx.org/rewrites: "serviceName=nginx3-svc rewrite=/"
+
+      #kubernetes.io/ingress.class: "nginx"
+      #nginx.ingress.kubernetes.io/rewrite-target: /$2
+      #nginx.ingress.kubernetes.io/use-regex: "true"    
+spec:
+  ingressClassName: nginx
+  
+    #  defaultBackend:
+    #service:
+    #  name: hashi-svc
+    #  port:
+    #    number: 80
+
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      - path: /api(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: nginx3-svc
+            port:
+              number: 80
+      - path: /hashi
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: hashi-svc
+            port:
+              number: 80
+      - path: /
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: nginx3-svc
+            port:
+              number: 80
+status:
+  loadBalancer: {}

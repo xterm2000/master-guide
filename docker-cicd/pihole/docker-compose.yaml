@@ -1,0 +1,32 @@
+# docker-compose.yml (separate file, e.g. /opt/devops/pihole/)
+services:
+  pihole:
+    container_name: piholeDNS
+    image: pihole/pihole:latest
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      # web UI on 8053 to avoid conflict with other services on :80
+      - "8053:80"
+    environment:
+      FTLCONF_webserver_api_password: 'changeme'
+      TZ: 'America/New_York'
+      # If using Docker's default `bridge` network setting the dns listening mode should be set to 'ALL'
+      FTLCONF_dns_listeningMode: 'ALL'
+
+      FTLCONF_dns_upstreams: |-
+        8.8.8.8
+        8.8.4.4
+        1.1.1.1
+        9.9.9.9
+      FTLCONF_dns_hosts: |-
+        192.168.68.200 jenkins.home
+        192.168.68.200 nexus.home
+        192.168.68.200 gitea.home
+        192.168.68.200 pgadmin.home
+        192.168.68.200 traefik.home
+        192.168.68.200 jaeger.home
+    volumes:
+      - ./etc-pihole:/etc/pihole
+      - ./etc-dnsmasq:/etc/dnsmasq.d
+    restart: unless-stopped

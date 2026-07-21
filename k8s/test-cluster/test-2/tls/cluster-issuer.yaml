@@ -1,0 +1,20 @@
+# clusterissuer.yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-aws
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: your@email.com
+    privateKeySecretRef:
+      name: letsencrypt-tls-key
+    solvers:
+    - dns01:
+        route53:
+          region: us-east-1
+          hostedZoneID: <YOUR-ZONE-ID>
+          accessKeyID: <YOUR-ACCESS-KEY-ID>
+          secretAccessKeySecretRef:
+            name: cert-manager-route53
+            key: secret-access-key

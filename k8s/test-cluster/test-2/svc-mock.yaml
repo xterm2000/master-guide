@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: mock-api
+  name: mock-api-svc
+spec:
+  clusterIP: 10.233.46.183
+  clusterIPs:
+  - 10.233.46.183
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: mock-api

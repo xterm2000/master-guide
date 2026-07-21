@@ -1,0 +1,99 @@
+[user]
+	email = mitek@gmail.com
+  name = xterm2000
+
+[core]
+    editor = vim
+    autocrlf = input          # LF on commit, leave alone on checkout (Linux/Mac)
+    whitespace = trailing-space,space-before-tab
+    pager = less -FRX
+
+[init]
+    defaultBranch = master
+
+[pull]
+    rebase = true             # avoid pointless merge commits on pull
+
+[push]
+    default = current         # push to same-named remote branch
+
+[fetch]
+    prune = true              # auto-remove deleted remote branches
+
+[rebase]
+    autoStash = true          # stash dirty tree before rebase, pop after
+
+[diff]
+    tool = vimdiff
+    colorMoved = zebra        # moved lines get distinct color from added/removed
+
+[merge]
+    tool = vimdiff
+    conflictstyle = diff3     # show base/ours/theirs in conflict markers
+
+[color]
+    ui = auto
+
+[color "branch"]
+    current  = yellow bold
+    local    = green
+    remote   = red
+
+[color "diff"]
+    meta     = yellow bold
+    frag     = magenta bold
+    old      = red bold
+    new      = green bold
+    whitespace = red reverse
+
+[color "status"]
+    added     = green bold
+    changed   = yellow bold
+    untracked = red bold
+
+[alias]
+    # --- log / history ---
+    lg    = log --graph --oneline --decorate --all
+    lg2   = log --graph --oneline --decorate --all --date=short --format='%C(yellow)%h%Creset %C(cyan)%ad%Creset %s %C(green)(%an)%Creset'
+    last  = log -1 HEAD --stat
+    hist  = log --pretty=format:'%C(yellow)%h %C(green)%ad %C(red)%d %C(white)%s %C(blue)[%an]' --decorate --date=short
+
+    # --- status / diff ---
+    st    = status -sb
+    d     = diff
+    ds    = diff --staged
+    dw    = diff --word-diff
+
+    # --- branching ---
+    br    = branch -vv
+    bra   = branch -vva
+    co    = checkout
+    cob   = checkout -b
+    gone  = "!git fetch --prune && git branch -vv | grep ': gone]' | awk '{print $1}' | xargs git branch -d"
+
+    # --- committing ---
+    ca    = commit --amend --no-edit
+    cm    = commit -m
+    unstage = reset HEAD --
+    undo  = reset --soft HEAD~1   # undo last commit, keep changes staged
+
+    # --- remotes ---
+    rv    = remote -v
+    pf    = push --force-with-lease  # safer than --force
+    sync  = "!git fetch --all --prune && git reset --hard origin/master"
+
+    # --- stash ---
+    sl    = stash list
+    ss    = stash push -m
+    sp    = stash pop
+
+    # --- misc ---
+    aliases = config --get-regexp alias
+    whoami  = "!git config user.name && git config user.email"
+    root    = rev-parse --show-toplevel
+
+[url "git@github.com:"]
+    insteadOf = https://github.com/    # use SSH instead of HTTPS for GitHub
+
+[credential]
+    helper = store
