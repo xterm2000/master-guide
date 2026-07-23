@@ -4,7 +4,7 @@
 # Internet Gateways, NAT Gateways, Security Groups, VPCs, Subnets,
 # Snapshots, Load Balancers, AMIs (owned), Placement Groups
 
-set -uo pipefail
+set -euo pipefail
 
 BOLD="\033[1m"
 CYAN="\033[36m"

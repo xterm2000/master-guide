@@ -10,6 +10,7 @@ comparison, local-dev branching workflow, and config scope rules.
 | Local-dev branching workflow (feature branches, PR flow) | `git-local-dev.md` |
 | `--global` vs `--local` vs `--system` config, precedence | `git-config-scopes.md` |
 | Personal `.gitconfig` (aliases, defaults) | `.gitconfig` |
+| Force-purging unreachable objects after a history rewrite (reflog expire + gc, verifying a secret is truly gone) | `git-append.md` |
 
 ## See Also
 

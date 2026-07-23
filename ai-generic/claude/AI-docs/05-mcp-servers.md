@@ -81,6 +81,26 @@ server, checked into that project:
 [Environment variable expansion](#environment-variable-expansion) below for the
 fix (`${PG_PASSWORD}` instead of the literal value).
 
+## Credential storage for self-built stdio servers
+
+A self-built stdio MCP server needs somewhere to keep its OAuth credentials —
+client secret, refresh token, access token. Don't put those in the project
+repo the server is used from, even with a `.gitignore` entry: that only works
+until someone runs a broad `git add`, switches tools, or the entry gets
+dropped in a refactor.
+
+Instead, give the server its own directory outside any repo:
+
+```
+~/.config/<server-name>/
+```
+
+Put the server's own code there too, alongside its credential files, rather
+than inside the project. This isn't just tidiness — a server that lives in
+`~/.config/<server-name>/` has no repo to accidentally commit its credentials
+into in the first place, so it doesn't depend on `.gitignore` (or on
+remembering to add one) to keep secrets out of git.
+
 ## Scopes
 
 | Scope | Loads in | Shared with team | Stored in |
