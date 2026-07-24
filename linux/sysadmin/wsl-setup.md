@@ -5,10 +5,16 @@
 `.wslconfig` file
 
 ```ini
+# system defaults
 [wsl2]
 memory=8GB
 swap=4GB
 defaultVhdSize=20GB
+
+# linux files premissions insteead of 777
+[automount]
+options = "metadata,umask=22,fmask=111"
+
 ```
 
 - make dir for the distro
