@@ -13,6 +13,62 @@ alias icdiff="~/.local/bin/icdiff --"
 > **jq** - a lightweight command-line JSON processor  
 > Syntax: `jq [flags] [expression] [file...]`
 
+## Debugging Methodology: Build Pipelines One Stage at a Time
+
+Treat it like debugging a black box: never write the full pipe in one shot - build it one stage at a time, checking real output at each stage before adding the next `|`.
+
+**1. Look at the shape first, don't guess**
+
+```bash
+jq 'type' file.json                # "array" or "object"?
+jq 'length' file.json              # how many top-level elements/keys?
+jq '.[0]' file.json                # (if array) what does ONE element look like?
+jq 'keys' file.json                # (if object) what fields exist at top level?
+```
+
+**2. If nesting is deep/inconsistent, map it instead of reading it**
+
+```bash
+jq '[paths] | unique' file.json                # every path that exists, anywhere
+jq '.. | objects | keys' file.json | sort -u   # every key name used, at any depth
+```
+
+`paths` is the workhorse for "I don't know the shape" - it walks the whole tree and gives you every address (as an array like `["children",3,"table_name"]`) so you can see what's actually there instead of assuming.
+
+**3. Build the pipeline left to right, testing after every stage**
+
+Don't write `.[] | .children[] | select(...)` blind. Do:
+
+```bash
+jq '.[0]' file.json                          # stage 0: one element, sanity check
+jq '.[] | .children' file.json | head        # stage 1: does .children look like I think?
+jq '.[] | .children | length' file.json | sort -n | uniq -c   # stage 2: distribution of counts
+```
+
+That last one is huge - a histogram of `length` values tells you instantly what a reasonable filter threshold even is (is 5 rare or is everyone above 5?), before you commit to `select(...)`.
+
+**4. Only then add `select`, and add conditions one at a time**
+
+```bash
+jq '.[] | select((.children|length) > 5)' file.json
+```
+
+`select(cond)` is jq's `WHERE` - it passes the input through unchanged if `cond` is truthy, drops it otherwise. It's easy to think of it as a transform when it's actually a gate.
+
+**5. Reduce the output to just what you need last**
+
+Once the filter is right, shrink the output - this is where mistakes get *visible* fastest:
+
+```bash
+jq '.[] | select((.children|length) > 5) | {object_name, n: (.children|length)}' file.json
+```
+
+**The general rule:** `.foo[]` and `..` *explode/flatten* - every step past one strips away the context of what contained it, so context you'll want later (like `object_name` when you're 3 levels into `children[].something`) has to be captured *before* you explode past it, not after. That's the most common mistake in ad-hoc filters: by the time you hit `count` or `select`, you're looking at bare child objects with no parent info left.
+
+A good sanity habit: `jq -C . file.json | less -R` to just browse it colorized/pageable before writing any filter at all.
+
+---
+
 ## substitute for sponge 
 ```bash
 jq '.foo = 1' file.json > tmp.json && mv tmp.json file.json

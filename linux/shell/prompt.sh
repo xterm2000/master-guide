@@ -11,15 +11,15 @@
 
 # --- colors (256-color escapes, wrapped in \[ \] so readline counts width correctly) ---
 __c_reset='\[\033[0m\]'
-__c_user='\[\033[1;38;5;51m\]'      # bright cyan
-__c_host='\[\033[1;38;5;51m\]'      # bright cyan
-__c_at='\[\033[0;38;5;245m\]'       # grey
-__c_path='\[\033[1;38;5;33m\]'      # bold blue
-__c_frame='\[\033[0;38;5;240m\]'    # dim grey box-drawing
-__c_git_clean='\[\033[1;38;5;76m\]' # green
-__c_git_dirty='\[\033[1;38;5;178m\]'# yellow
-__c_ok='\[\033[1;38;5;46m\]'        # bright green
-__c_fail='\[\033[1;38;5;196m\]'     # bright red
+__c_user='\[\033[1;38;5;51m\]'       # bright cyan
+__c_host='\[\033[1;38;5;51m\]'       # bright cyan
+__c_at='\[\033[0;38;5;245m\]'        # grey
+__c_path='\[\033[1;38;5;33m\]'       # bold blue
+__c_frame='\[\033[0;38;5;240m\]'     # dim grey box-drawing
+__c_git_clean='\[\033[1;38;5;76m\]'  # green
+__c_git_dirty='\[\033[1;38;5;178m\]' # yellow
+__c_ok='\[\033[1;38;5;46m\]'         # bright green
+__c_fail='\[\033[1;38;5;196m\]'      # bright red
 
 __git_prompt_info() {
     local branch status
