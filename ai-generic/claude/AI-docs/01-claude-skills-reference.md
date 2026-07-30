@@ -1,4 +1,4 @@
-# Claude Code Skills — Reference
+# Claude Code Skills & AGENTS.md — Reference
 
 ## Skill directory structure
 
@@ -121,6 +121,42 @@ Every field is optional; only `description` is recommended so Claude knows when 
 - **Automation glue:** `hooks`
 
 **The one most people never touch but should:** `paths`. If a skill is genuinely relevant only to, say, `*.tsx` files or a `/backend` directory, scoping it with `paths` keeps it from firing (or cluttering the auto-invoke listing) on unrelated work — cheaper than writing an over-narrow `description` and hoping the model infers scope correctly from wording alone.
+
+## What AGENTS.md does
+
+**AGENTS.md is not a Claude Code file.** It's an open, tool-agnostic standard (maintained by the Agentic AI Foundation) that other AI coding tools — OpenAI Codex, Cursor, GitHub Copilot, Gemini CLI, etc. — read for project-level context: build commands, code style, test commands, project structure, boundaries.
+
+**Claude Code does not read AGENTS.md natively.** It reads `CLAUDE.md` instead, loaded automatically at the start of every session by walking up the directory tree from your working directory and concatenating every `CLAUDE.md` it finds (closer files take precedence).
+
+If you maintain both files, or work across multiple AI tools, there are two workarounds — pick one, don't duplicate content by hand:
+
+1. **Import (recommended if AGENTS.md is your source of truth):**
+
+    ```
+    # CLAUDE.md
+    @AGENTS.md
+
+    ## Claude-specific rules
+    Use plan mode for changes under src/billing/.
+    ```
+
+    Claude Code expands the import at session start, then appends anything after it.
+
+2. **Symlink (if the files are meant to be identical):**
+
+    ```
+    ln -s CLAUDE.md AGENTS.md
+    ```
+
+### CLAUDE.md vs AGENTS.md vs SKILL.md — don't conflate these
+
+|File|Loaded|Scope|Read by|
+|---|---|---|---|
+|`CLAUDE.md`|Every session, always in context|Project or personal|Claude Code only|
+|`AGENTS.md`|Every session (that tool's equivalent of CLAUDE.md)|Project|Codex, Cursor, Copilot, etc. — not Claude Code natively|
+|`SKILL.md`|Only when Claude decides it's relevant, or invoked with `/skill-name`|Personal/project/plugin/enterprise|Claude Code (and other tools supporting the open Agent Skills spec)|
+
+The practical distinction: CLAUDE.md/AGENTS.md are **always-loaded facts and conventions** ("we use pnpm," "test command is `make test-integration`"). If a CLAUDE.md section grows into a multi-step _procedure_ rather than a fact, that's the signal to extract it into a skill instead — keeps CLAUDE.md short (official guidance: aim under ~200 lines) since it's paid for on every single turn whether relevant or not.
 
 ### Worked example: dummy `oracle-lock-triage` skill
 
