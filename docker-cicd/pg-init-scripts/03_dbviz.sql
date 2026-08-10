@@ -2,6 +2,9 @@ CREATE USER mitek WITH LOGIN PASSWORD 'onair';
 CREATE DATABASE dbviz OWNER mitek;
 \c dbviz
 
+-- mitek owns and fully controls public schema; no PUBLIC access
+ALTER SCHEMA public OWNER TO mitek;
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT ALL PRIVILEGES ON SCHEMA public TO mitek;
 ALTER DEFAULT PRIVILEGES FOR ROLE mitek IN SCHEMA public GRANT ALL ON TABLES TO mitek;
 ALTER DEFAULT PRIVILEGES FOR ROLE mitek IN SCHEMA public GRANT ALL ON SEQUENCES TO mitek;

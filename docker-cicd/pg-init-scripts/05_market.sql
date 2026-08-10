@@ -1,0 +1,10 @@
+CREATE USER market WITH LOGIN PASSWORD 'market';
+CREATE DATABASE marketdb OWNER market;
+\c marketdb
+
+-- market owns and fully controls public schema; no PUBLIC access
+ALTER SCHEMA public OWNER TO market;
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT ALL PRIVILEGES ON SCHEMA public TO market;
+ALTER DEFAULT PRIVILEGES FOR ROLE market IN SCHEMA public GRANT ALL ON TABLES TO market;
+ALTER DEFAULT PRIVILEGES FOR ROLE market IN SCHEMA public GRANT ALL ON SEQUENCES TO market;

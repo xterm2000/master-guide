@@ -1,0 +1,10 @@
+CREATE USER claude WITH LOGIN PASSWORD 'claude';
+CREATE DATABASE claude OWNER claude;
+\c claude
+
+-- claude owns and fully controls public schema; no PUBLIC access
+ALTER SCHEMA public OWNER TO claude;
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT ALL PRIVILEGES ON SCHEMA public TO claude;
+ALTER DEFAULT PRIVILEGES FOR ROLE claude IN SCHEMA public GRANT ALL ON TABLES TO claude;
+ALTER DEFAULT PRIVILEGES FOR ROLE claude IN SCHEMA public GRANT ALL ON SEQUENCES TO claude;

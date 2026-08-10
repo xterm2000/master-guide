@@ -2,8 +2,9 @@ CREATE USER gitea WITH LOGIN PASSWORD 'gitea';
 CREATE DATABASE gitea OWNER gitea;
 \c gitea
 
--- gitea owns and fully controls public schema
+-- gitea owns and fully controls public schema; no PUBLIC access
 ALTER SCHEMA public OWNER TO gitea;
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT ALL PRIVILEGES ON SCHEMA public TO gitea;
 ALTER DEFAULT PRIVILEGES FOR ROLE gitea IN SCHEMA public GRANT ALL ON TABLES TO gitea;
 ALTER DEFAULT PRIVILEGES FOR ROLE gitea IN SCHEMA public GRANT ALL ON SEQUENCES TO gitea;
