@@ -22,3 +22,4 @@ A personal DevOps/sysadmin reference repo, built around a Kubernetes lab cluster
 ## Working with Large Output
 
 - For large or iterative fetches from any source (web pages, API responses, command output, etc.), dump to a file first, then read/query the file — don't pull it directly into the conversation.
+- When verifying multiple related bash commands (e.g. checking several flags/man pages before documenting them), write one script that runs them all and logs output (and exit codes) to a file, then run it once and read the log — rather than issuing many separate Bash calls.
