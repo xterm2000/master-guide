@@ -10,6 +10,7 @@ self-descriptive; open the file for detail.
 | `shell/` | aliases, arrays, heredocs, process substitution, bash loops cookbook, prompt, vim, history expansion + `compgen -v` introspection (`bash-history-expansion.md`) |
 | `ssh/` | key generation/distribution, passwordless sudo, mass reboot, node IP map, SSH client config, node-connect script, Windows key perms — see [`ssh/`](ssh/) |
 | `tls-pki/` | OpenSSL/PKI reference, X.509 cert inspection |
+| `gpg/` | GnuPG reference — key creation, signing/verifying, encrypt/decrypt, batch mode, pinentry troubleshooting |
 | `sysadmin/` | LVM/storage concepts + disk resize, ACLs, WSL setup, user/group administration, firewalld, cron/at, boot process & systemd, SELinux, install reference for tools used across this repo (`installations.md`), system-wide shared SDKMAN setup (`sdkman-setup.md`) |
 | `version-control/` | SVN → Git comparison |
 
