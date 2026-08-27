@@ -1,5 +1,8 @@
 # SSH Key Generation & Distribution
 
+> For a single host from scratch, see [`passwordless-login.md`](passwordless-login.md).
+> This doc is the bulk/fleet version.
+
 Public-key auth replaces the password prompt with a key pair: a private key that
 never leaves your machine, and a public key copied onto every remote node's
 `~/.ssh/authorized_keys`. The remote sshd challenges the client to prove it holds
