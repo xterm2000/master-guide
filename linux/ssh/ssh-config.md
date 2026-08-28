@@ -17,8 +17,10 @@ Host <alias>
 ### Identity & Authentication
 
 - **`IdentityFile`** - path to the private key (`~/.ssh/id_rsa`, `~/.ssh/id_ed25519`)
+- **`CertificateFile`** - path to a CA-signed cert (`~/.ssh/id_ed25519-cert.pub`); usually auto-detected when it sits beside `IdentityFile` with the matching basename, explicit here for clarity
 - **`User`** - username to connect as
-- **`IdentitiesOnly yes`** - only use keys specified in config, not the SSH agent
+- **`IdentitiesOnly yes`** - only use keys specified in config, not the SSH agent. An agent-loaded key is otherwise offered to **every** host; pair this with an explicit `IdentityFile` to send only the named key (and to stay under the server's `MaxAuthTries` when the agent holds many keys)
+- **`AddKeysToAgent yes`** - `ssh` adds the key to a running `ssh-agent` on first use, "as if by ssh-add(1)" - type a passphrase once per boot, and the matching `*-cert.pub` is pulled in alongside it. `ask` / `confirm` prompt first
 
 ### Connection
 
@@ -94,6 +96,10 @@ Host devbox
 
 - `Host *` applies to **all** connections and is great for global defaults.
 - More specific `Host` blocks override `Host *` - order matters, first match wins per parameter.
+- A `Host <alias>` block matches only the **literal string** you pass to `ssh`.
+  `ssh myhost` matches `Host myhost`; `ssh 192.0.2.10` or `ssh box.example.com`
+  does **not** - so that block's `IdentityFile` / `User` / `Port` silently
+  don't apply. Connect via the alias, or pass `-i` / `-p` / `user@` explicitly.
 - Run `ssh -vvv hostname` to debug which config values are actually being applied.
 - Permissions matter: the file should be `chmod 600 ~/.ssh/config`.
 
@@ -105,3 +111,5 @@ For key generation/distribution and passwordless sudo, see:
 - [`ssh-key-distribution.md`](ssh-key-distribution.md)
 - [`passwordless-sudo.md`](passwordless-sudo.md)
 - [`node-connect.md`](node-connect.md) — this repo's node-map + connect script, which pairs with `ProxyJump`/`Host` blocks defined here
+- [`dynamic-ip-access.md`](dynamic-ip-access.md) — DDNS / mesh VPN for a host whose public IP changes
+- [`passwordless-login.md`](passwordless-login.md) §6 — offering a CA cert with no per-host config via `ssh-agent`

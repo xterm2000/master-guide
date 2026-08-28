@@ -36,6 +36,9 @@ Two certificate types:
 Use **separate CA keypairs** for user certs and host certs — a compromised
 host-signing key shouldn't also be able to mint user login certs.
 
+Keep the CA **private** key off any internet-exposed host — signing happens on
+a workstation or an offline box; only the CA *public* key is distributed.
+
 `ssh-keygen` itself takes no config file — every option is a CLI flag. Config
 files only enter the picture on the *trust* side (`sshd_config`,
 `~/.ssh/config`, `known_hosts`) — see §5.
@@ -217,6 +220,20 @@ ssh-keygen -u -k -f revoked.krl -s ca_user_key.pub another.spec
 
 Deploy the KRL server-side via `RevokedKeys` in `sshd_config` (§5).
 
+### Renewal vs revocation
+
+Letting a cert **expire** (short `-V`) needs no server-side action at all — the
+server trusts the CA, not the individual cert. To renew, re-sign the *same*
+public key from the *same* CA with a fresh `-V` and replace the `-cert.pub`
+file on the client:
+
+```bash
+ssh-keygen -s ca_user_key -I "alice-laptop" -n alice -V +52w -z 3 id_laptop.pub
+```
+
+Revocation (a KRL) is only for pulling a cert *before* its validity window
+ends — a lost laptop, a leaked key.
+
 ---
 
 ## 5. Trust-side configuration
@@ -234,6 +251,11 @@ TrustedUserCAKeys /etc/ssh/ca_user_key.pub
 #  certificate is presented ... and has its signing CA key listed in this
 #  file, then it may be used for authentication for any user listed in the
 #  certificate's principals list." Path is the CA's PUBLIC key only.
+# The filename is arbitrary (ca_user_key.pub is only a convention). Three
+# things must agree: this file on disk, the path named here, and the cert's
+# "Signing CA" fingerprint (ssh-keygen -L -f <cert>). A renamed or stale file
+# = every cert silently rejected. The file must also be world-readable (644)
+# or sshd can't read it after dropping privileges.
 
 AuthorizedPrincipalsFile /etc/ssh/auth_principals/%u
 # "Specifies a file that lists principal names that are accepted for
@@ -313,3 +335,45 @@ Host web01
 | Distributed trust anchor | `root.crt` in a trust store | CA pubkey in `sshd_config` / `known_hosts` |
 | Revocation | CRL (`openssl ca -revoke`) | KRL (`ssh-keygen -k` / `-Q`), or just short `-V` windows |
 | Config file | `openssl.cnf` (or none, via `x509 -req`) | none for signing; `sshd_config`/`ssh_config` for trust |
+
+---
+
+## 8. Troubleshooting
+
+Symptom: cert is offered (`ssh -v` shows
+`Offering public key: ... ED25519-CERT`) but the server responds
+`Authentications that can continue: publickey,...,password` and login falls
+through to a password prompt. Work the chain, on the **server**:
+
+```bash
+# 1. Is CA trust configured at all?
+sudo sshd -T | grep -Ei 'trusteduserca|pubkeyauth|authorizedprincipalsfile|revokedkeys'
+#   trustedusercakeys empty            -> CA not trusted; cert can't work
+#   pubkeyauthentication no            -> key auth disabled entirely
+#   revokedkeys -> unreadable file     -> sshd rejects ALL pubkey auth for everyone
+
+# 2. Inspect the cert.
+ssh-keygen -L -f id_laptop-cert.pub
+#   Principals: must contain the LOGIN username when authorizedprincipalsfile
+#     is "none" (no AuthorizedPrincipalsFile). A cert signed with -n for a
+#     different name is rejected.
+#   Valid: window must bracket the current time. A test cert signed -V +1d is
+#     dead the next day. Check the server clock too (`date`).
+#   Type: must be "user certificate", not "host certificate".
+
+# 3. Does the trusted CA actually match the cert's signer?
+sudo ssh-keygen -l -f "$(sudo sshd -T | awk '/^trustedusercakeys/{print $2}')"
+#   This fingerprint MUST equal the cert's "Signing CA" line from step 2.
+#   Mismatch = the server trusts a different (or renamed/stale) CA file.
+
+# 4. The log states the real reason.
+sudo journalctl -u sshd --since "10 min ago" | grep -iE 'cert|principal|invalid|revoked|signature'
+#   e.g. "Certificate invalid: name is not a listed principal"
+#        "Certificate invalid: expired"
+#        (nothing at all) -> CA not trusted / wrong config file in effect
+
+# 5. Right daemon? A non-standard port may be a container or a second sshd
+#    with its own config that never saw TrustedUserCAKeys.
+sudo ss -tlnp | grep <port>
+#   `sshd -T` with no -f reads only the default /etc/ssh/sshd_config.
+```

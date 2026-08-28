@@ -98,25 +98,88 @@ Host server
 
 See [`ssh-config.md`](ssh-config.md) for more.
 
-## 5. Optional hardening: disable password auth
+## 5. Optional hardening: lock the server down
 
-Once key login is confirmed working, stop the server accepting passwords at all.
+Once key login is confirmed working, close every method you don't use.
 
 **Keep your current SSH session open** and test key login in a second terminal
 before and after — a mistake here can lock you out.
 
-Drop-in file (preferred over editing `/etc/ssh/sshd_config` directly):
+### Auth methods are independent toggles
+
+At connect time `sshd` advertises a *list* of methods it will accept — you can
+see it in `ssh -v` output:
+
+```
+Authentications that can continue: publickey,gssapi-keyex,gssapi-with-mic,password
+```
+
+The client tries them in turn until one works. **Each method has its own on/off
+switch, and enabling one never disables another.** Turning on
+`PubkeyAuthentication` does nothing to `PasswordAuthentication` — if you don't
+explicitly set `PasswordAuthentication no`, the server still accepts passwords
+and the brute-force bots still get their guesses. You have to close each door
+you don't want.
+
+### The drop-in file
 
 ```bash
-sudo tee /etc/ssh/sshd_config.d/50-no-passwords.conf <<'EOF'
+sudo tee /etc/ssh/sshd_config.d/50-hardening.conf <<'EOF'
+PermitRootLogin no
+PubkeyAuthentication yes
 PasswordAuthentication no
 KbdInteractiveAuthentication no
+GSSAPIAuthentication no
 EOF
 sudo sshd -t && sudo systemctl restart sshd
 ```
 
+| Directive | Effect |
+|---|---|
+| `PermitRootLogin no` | `root` may not log in over SSH by any method. `root` is the one username guaranteed to exist on every Linux box — the #1 brute-force target. Log in as a normal user, then `sudo`. (Other values: `prohibit-password` = key only, `forced-commands-only` = automation only.) |
+| `PubkeyAuthentication yes` | Accept public-key / CA-cert auth. Already the default; stating it makes the policy explicit and survives a future default change. |
+| `PasswordAuthentication no` | Refuse password auth — the method that sends a guessable shared secret and that every SSH scanner targets. |
+| `KbdInteractiveAuthentication no` | Disables the *second* password-capable channel (generic PAM `keyboard-interactive`). Disabling `PasswordAuthentication` alone can leave this route open. Re-enable deliberately if you later add TOTP/2FA. |
+| `GSSAPIAuthentication no` | Kerberos SSO (Active Directory / MIT realms). If you have no realm it can never succeed, but it's still an exposed code path plus handshake round-trips. The pile of other `gssapi*` lines in `sshd -T` go inert once this is off. |
+
+### Drop-in precedence
+
+`/etc/ssh/sshd_config` on Rocky/RHEL has `Include /etc/ssh/sshd_config.d/*.conf`
+at the **top** of the file. Per `sshd_config(5)`, "the first obtained value for
+each parameter is used" — so a value set in a drop-in is read before the
+defaults lower in `sshd_config` and wins. (This is unrelated to `ssh_config`'s
+"first matching `Host` block" rule, and it's the opposite of the "last wins"
+people often assume.)
+
+- Keep **all** your SSH policy in one drop-in file. Overlapping files
+  (`50-no-passwords.conf` *and* `50-hardening.conf` both setting
+  `PasswordAuthentication`) make the effective value ambiguous — the first file
+  read by glob order wins and the later one is silently ignored.
+- Always confirm the merged result, not the file contents:
+  ```bash
+  sudo sshd -T | grep -Ei 'permitrootlogin|pubkeyauth|passwordauth|kbdinteractive|gssapiauth'
+  ```
+  `sshd -T` dumps the fully-merged effective config. `sshd -t` (no capital)
+  just validates syntax — run it before every restart.
+
 `sshd -t` validates config before the restart. On Rocky/RHEL the service is
 `sshd`; on Debian/Ubuntu it's `ssh`.
+
+### If the VM is exposed to the internet
+
+Key-only auth already stops the brute-force bots, but an exposed sshd still gets
+scanned continuously. Add:
+
+- **fail2ban** (or a firewalld ipset) to ban IPs after repeated failures — cuts
+  log noise and load even though cert auth blocks them anyway.
+- **Source-IP allowlist** on the SSH port if you always connect from known
+  networks — a firewall rule beats everything else here.
+- **Don't expose management consoles.** Check `sudo ss -tlnp` and
+  `sudo firewall-cmd --list-all` — e.g. the Cockpit web console on `:9090`
+  should not be internet-reachable.
+- **Patch automatically** (`dnf-automatic`) since it's exposed.
+- A **non-standard port** (2222 etc.) reduces log volume only — it is not a
+  security control.
 
 ## 6. Alternative: CA-signed certificate instead of `authorized_keys`
 
@@ -175,6 +238,87 @@ Host certificates (server proves itself to the client, killing the
 `known_hosts` TOFU prompt) work the same way in reverse — use a **separate** CA
 keypair; see [`ssh-ca.md`](ssh-ca.md) §2, §5.
 
+**The CA-pubkey filename is arbitrary.** `ca_user_key.pub` is just a
+convention — it could be `aqualabs-ca.pub` or anything else. What must line up
+is three things: the file on disk, the path in `TrustedUserCAKeys`, and the
+cert's `Signing CA` fingerprint (`ssh-keygen -L -f <cert>` vs
+`ssh-keygen -l -f <the file TrustedUserCAKeys points at>`). A renamed or
+stale file here means every cert is silently rejected and login falls through
+to a password prompt. Also: `/etc/ssh/ca_user_key.pub` must be world-readable
+(`644`) or `sshd` can't read it after dropping privileges.
+
+**Keep the CA _private_ key off any internet-exposed server.** Signing happens
+on a workstation or an offline host; only the CA *public* key belongs on the
+servers.
+
+### What happens when the cert expires
+
+Not a permanent lockout. The server trusts the *CA*, not the individual cert,
+so you just mint a fresh one over the **same public key** and swap the file on
+the client — no server-side change:
+
+```bash
+ssh-keygen -s ~/.ssh/ca_user_key -I "youruser-laptop" -n youruser -V +52w -z 2 \
+  id_ed25519.pub          # -> new id_ed25519-cert.pub, copy it over the old one
+```
+
+You're only truly locked out if you *also* lose the CA private key and left no
+other way in. Keep one break-glass route (a plain `authorized_keys` key stored
+offline, or console access) and re-sign a few weeks before expiry, not after.
+
+### Using the cert without per-host config (ssh-agent)
+
+`ssh` **always** attaches `<key>-cert.pub` automatically when it uses `<key>`,
+as long as the two files share a basename and directory (`id_shiva` +
+`id_shiva-cert.pub`). So the cert is never the thing you have to wire up — the
+only question is how `ssh` decides to *try that key* when there's no
+`IdentityFile` line for the host. Three ways, roughly increasing in scope:
+
+| Method | What it does | Scope |
+|---|---|---|
+| `ssh-add ~/.ssh/id_shiva` | Loads key **and** cert into `ssh-agent`; agent offers them on every connection | all hosts |
+| Name the key `id_ed25519` | `ssh` auto-tries the standard basenames for every host with zero config | all hosts |
+| `Host *` / `IdentityFile ~/.ssh/id_shiva` | One global config line, no per-host block | all hosts |
+
+**Why `ssh-add` also loads the cert:** per `ssh-add(1)`, "after loading a
+private key, ssh-add will try to load corresponding certificate information
+from the filename obtained by appending `-cert.pub` to the name of the private
+key file." Confirm with `ssh-add -L` — a loaded cert shows as
+`ssh-ed25519-cert-v01@openssh.com`.
+
+**Windows** — the agent service ships disabled:
+
+```powershell
+Set-Service ssh-agent -StartupType Automatic
+Start-Service ssh-agent
+ssh-add C:\Users\mitek\.ssh\id_shiva     # pulls in id_shiva-cert.pub too
+ssh-add -l                                # or -L to see the cert
+```
+
+Once `StartupType` is `Automatic` the agent (and its loaded keys) survive a
+reboot — Windows persists agent contents in the registry, unlike Linux.
+
+**Linux** — the agent is per-session. Options:
+
+- `eval "$(ssh-agent)"` then `ssh-add ~/.ssh/id_shiva` in your shell rc
+- `AddKeysToAgent yes` in `~/.ssh/config` — `ssh` adds the key to a running
+  agent on first use, "as if by ssh-add(1)" (`ssh_config(5)`); the adjacent
+  cert comes along
+- a `systemd --user` service running `ssh-agent`
+
+**Tradeoff:** the agent (and the default-filename trick) offer this cert to
+*every* server you SSH to, not just shiva. That's harmless — a server that
+doesn't trust `aqualabs-ca` just ignores an identity it can't verify — but
+each offered identity counts against the server's `MaxAuthTries` (default 6),
+so a large agent can get you disconnected before the *right* key is tried. If
+that bites, scope it back: `IdentitiesOnly yes` plus an explicit
+`IdentityFile` per `Host` block makes `ssh` send only the named key even when
+the agent holds more.
+
+For the other half of a config-free setup — a stable name when the server's
+public IP keeps changing — see
+[`dynamic-ip-access.md`](dynamic-ip-access.md).
+
 ## Troubleshooting
 
 - `ssh -v user@server` — verbose handshake; shows which keys are offered and why
@@ -185,11 +329,36 @@ keypair; see [`ssh-ca.md`](ssh-ca.md) §2, §5.
   `restorecon -R -v ~/.ssh` to fix the file context.
 - Wrong key offered → point at it explicitly: `ssh -i ~/.ssh/id_ed25519 user@server`,
   or set `IdentityFile` in `~/.ssh/config`.
+- **Key never even tried** (`ssh -v` `Will attempt key:` list shows only the
+  default names, all `type -1`) → a non-standard filename like `id_shiva` is
+  used *only* when named by `IdentityFile` or `-i`. And `ssh <ip>` /
+  `ssh <rawhostname>` does **not** match a `Host <alias>` block — the alias
+  matches only the literal string you type — so that block's `IdentityFile`,
+  `User`, `Port` never apply. Use the alias, or pass `-i` / `-p` / `user@`
+  explicitly.
+- **CA cert offered but silently rejected, login falls to password** → work
+  through, on the server:
+  - `sudo sshd -T | grep -Ei 'trusteduserca|pubkeyauth|authorizedprincipalsfile|revokedkeys'`
+    — `trustedusercakeys` must be set; `revokedkeys` pointing at an unreadable
+    file makes sshd reject *all* pubkey auth.
+  - `ssh-keygen -L -f <cert>` — `Principals` must contain the login username
+    (required when `authorizedprincipalsfile none`); `Valid` window must be
+    current; note the `Signing CA` fingerprint.
+  - `sudo ssh-keygen -l -f <path from TrustedUserCAKeys>` — its fingerprint
+    must equal the cert's `Signing CA`. A renamed/stale CA file is the classic
+    cause.
+  - `sudo journalctl -u sshd --since "10 min ago" | grep -iE 'cert|principal|invalid'`
+    — gives the exact rejection reason.
+  - If sshd listens on a non-standard port, `sudo ss -tlnp | grep <port>` — it
+    may be a container or a second sshd with its own config that never saw
+    `TrustedUserCAKeys` (`sshd -T` with no `-f` reads only the default
+    `/etc/ssh/sshd_config`).
 
 ## See Also
 
 - [`ssh-key-distribution.md`](ssh-key-distribution.md) — same idea across many nodes at once
 - [`ssh-config.md`](ssh-config.md) — `~/.ssh/config` client options
+- [`dynamic-ip-access.md`](dynamic-ip-access.md) — reaching a host whose public IP keeps changing (DDNS, mesh VPN)
 - [`ssh-ca.md`](ssh-ca.md) — CA-signed certificates instead of per-host `authorized_keys` entries
 - [`passwordless-sudo.md`](passwordless-sudo.md) — removing the *sudo* password prompt (separate topic)
 - [`windows-key-permissions.md`](windows-key-permissions.md) — locking down the private key on a Windows client
