@@ -11,7 +11,7 @@ self-descriptive; open the file for detail.
 | `ssh/` | single-host passwordless login (`passwordless-login.md`), key generation/distribution, SSH certificate authority (`ssh-keygen -s`, KRL revocation), reaching a host with a changing public IP (`dynamic-ip-access.md` — DDNS, mesh VPN), passwordless sudo, mass reboot, node IP map, SSH client config, node-connect script, Windows key perms — see [`ssh/`](ssh/) |
 | `tls-pki/` | OpenSSL/PKI reference, X.509 cert inspection |
 | `gpg/` | GnuPG reference — key creation, signing/verifying, encrypt/decrypt, batch mode, pinentry troubleshooting |
-| `sysadmin/` | LVM/storage concepts + disk resize, ACLs, WSL setup, user/group administration, firewalld, cron/at, boot process & systemd, SELinux, install reference for tools used across this repo (`installations.md`), system-wide shared SDKMAN setup (`sdkman-setup.md`) |
+| `sysadmin/` | LVM/storage concepts + disk resize, ACLs, WSL setup, user/group administration, firewalld, cron/at/systemd timers (`scheduling.md`), boot process & systemd, SELinux, install reference for tools used across this repo (`installations.md`), system-wide shared SDKMAN setup (`sdkman-setup.md`) |
 | `version-control/` | SVN → Git comparison |
 
 ## See Also
