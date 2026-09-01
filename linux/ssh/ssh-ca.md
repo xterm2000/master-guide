@@ -99,6 +99,39 @@ ssh -i ~/.ssh/id_laptop user@host
 
 ---
 
+## 2a. Protecting the CA private key
+
+The CA private key is more sensitive than any individual host or user key —
+whoever holds it can mint a trusted login for any principal. It must never live
+on a machine it is used to authenticate *to*.
+
+- **Always passphrase-protect it** (`ssh-keygen` prompts — don't skip with
+  `-N ""`).
+- A password manager synced to cloud storage is a reasonable **at-rest backup**:
+  the manager's own encryption plus the key's passphrase are two independent
+  secrets.
+- For day-to-day signing without repeated extract/decrypt friction, a
+  **dedicated signing box** (a small persistent VM) is a sound pattern:
+  - **Host-only virtual network** — no route to the LAN or the internet — is the
+    actual isolation boundary. Verify with `ip route`, and confirm a `ping` to
+    the LAN gateway fails from inside it.
+  - Full-disk encryption (LUKS), since the key now lives at rest on that disk.
+  - Passphrase on the CA key file *as well as* the disk encryption.
+  - Snapshot after setup as a rollback point.
+  - Back up the VM disk carefully — it is now a second durable copy of the CA
+    key; don't let backups land somewhere unencrypted.
+  - Normal host hardening still applies (key-only SSH, patched, minimal package
+    footprint).
+
+  This is a **persistent appliance**, not a wipe-after-every-session model — the
+  key stays resident so signing is just "ssh in, run `ssh-keygen -s`, copy the
+  cert out," with the password-manager copy serving only as disaster recovery.
+
+Use `-U` (§3) to keep even the signing box's on-disk exposure to the CA
+*public* key only, with the private key loaded into its `ssh-agent`.
+
+---
+
 ## 3. Extended `-s` parameters
 
 Beyond `-I` / `-n` / `-V`, confirmed by direct testing:
@@ -377,3 +410,45 @@ sudo journalctl -u sshd --since "10 min ago" | grep -iE 'cert|principal|invalid|
 sudo ss -tlnp | grep <port>
 #   `sshd -T` with no -f reads only the default /etc/ssh/sshd_config.
 ```
+
+---
+
+## 9. Host key lifecycle (plain host keys, no CA)
+
+Separate from cert renewal (§4). A server's `/etc/ssh/ssh_host_*_key` pair is
+its identity to clients — recorded in `known_hosts` on first connect (or
+vouched for by a host cert — §3 (`-h`) and §5).
+
+### When to regenerate
+
+| Regenerate | Don't |
+|---|---|
+| VM was cloned from a template or snapshot (it shares another machine's host key / identity) | Routine maintenance or OS updates with no specific trigger |
+| Suspected compromise (rebuild the host first, *then* rotate) | After an IP or hostname change — host keys aren't tied to network identity |
+| Deprecating a key algorithm (e.g. dropping RSA) | "For hygiene" on a schedule — host keys are not passwords |
+| The private key file was exposed (a backup, a git repo, a shared drive) | |
+
+Check whether an existing VM's host key predates the VM itself (a sign it was
+baked into the image):
+
+```bash
+sudo stat /etc/ssh/ssh_host_ed25519_key      # compare mtime against the VM's creation date
+```
+
+The file should be mode `0600`, owned by root.
+
+### Consequences of regenerating
+
+- `sshd` needs at least one host key pair to start — removing all of them
+  without regenerating makes the service fail to start.
+- Every client that has connected before gets
+  `REMOTE HOST IDENTIFICATION HAS CHANGED` on the next connect and must clear
+  the stale entry first:
+
+  ```bash
+  ssh-keygen -R <host-or-ip>
+  ```
+
+- A **host CA** avoids this churn entirely: sign each server's host key once,
+  push `@cert-authority` to clients' `known_hosts` (§5), and rotating a host
+  key no longer touches any client.

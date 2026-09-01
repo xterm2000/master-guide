@@ -52,6 +52,11 @@ Host <alias>
 - **`ForwardX11 yes`** - enable X11 GUI forwarding
 - **`LocalForward`** - tunnel a local port to a remote one (`8080 localhost:80`)
 - **`RemoteForward`** - expose a local port on the remote side
+- **`DynamicForward`** - run a SOCKS proxy over the connection (`1080`)
+
+See [`port-forwarding.md`](port-forwarding.md) for what `-L` / `-R` / `-D` and
+these directives actually do, and the "tunnel a service instead of exposing its
+port" pattern.
 
 ---
 
@@ -112,4 +117,5 @@ For key generation/distribution and passwordless sudo, see:
 - [`passwordless-sudo.md`](passwordless-sudo.md)
 - [`node-connect.md`](node-connect.md) — this repo's node-map + connect script, which pairs with `ProxyJump`/`Host` blocks defined here
 - [`dynamic-ip-access.md`](dynamic-ip-access.md) — DDNS / mesh VPN for a host whose public IP changes
+- [`port-forwarding.md`](port-forwarding.md) — `LocalForward` / `RemoteForward` / `DynamicForward` in depth
 - [`passwordless-login.md`](passwordless-login.md) §6 — offering a CA cert with no per-host config via `ssh-agent`

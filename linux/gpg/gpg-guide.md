@@ -91,6 +91,12 @@ To generate a passphrase-less key for pure automation (e.g. a CI signing key sto
 
 Back up the auto-generated revocation certificate as its own entry, separate from where you store the key/passphrase (e.g. its own KeePass entry, or an offline copy) — a single leaked entry then can't hand over both the key and its kill switch. Set a calendar reminder to rotate/extend before the key's expiration date too.
 
+A workable password-manager layout:
+
+- One "crypto identity" group holding the private key, the public key / cert, the passphrase, and the expiration date together — everything needed to *use* the key.
+- The **revocation certificate as a separate entry** (or an offline-only copy) — never in the same group as the key. A single leaked group then can't hand over both the key and the means to revoke it.
+- A calendar reminder to extend or rotate before the expiration date.
+
 ### Production identity: certify-only primary + per-purpose subkeys
 
 The single combined-subkey key above (`[SEA]` on one subkey) is fine for throwaway/test keys, but a personal identity you intend to keep for years is better built as a **certify-only primary** with three separate subkeys, one per purpose. Each subkey can then be rotated or revoked independently without changing your fingerprint, and the primary key's Certify capability — the one thing that can mint new subkeys or certifications — only ever needs to come out for key maintenance, not daily signing/encrypting.
@@ -487,7 +493,7 @@ GPG (OpenPGP packet format) and OpenSSL (X.509/PKCS/CMS) use incompatible contai
 openssl genpkey -algorithm ED25519 -aes256 -pass pass:testpass123 -out private.pem
 # Use RSA-3072/4096 instead of ED25519 if the cert needs to work with S/MIME/Outlook — ED25519 support there is inconsistent.
 
-# Self-signed cert (fine for personal use; get a CA-issued cert if others need to verify S/MIME without manually importing your cert)
+# Self-signed cert (fine for personal use; get a CA-issued S/MIME cert — e.g. Actalis, which issues free personal certs — if others need to verify without manually importing yours)
 openssl req -new -x509 -key private.pem -passin pass:testpass123 -out cert.pem -days 730 -subj "/CN=Dana Test"
 ```
 

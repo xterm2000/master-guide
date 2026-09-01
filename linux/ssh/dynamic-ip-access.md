@@ -143,4 +143,6 @@ Full VPN setup is out of scope here — this is just the pattern and why it fits
 
 - [`passwordless-login.md`](passwordless-login.md) — §5 server hardening, §6 CA certs + `ssh-agent` auto-offer
 - [`ssh-config.md`](ssh-config.md) — `~/.ssh/config` `Host` blocks, `HostName`
+- [`restricted-networks.md`](restricted-networks.md) — the opposite problem: the *network you're on* blocks or intercepts SSH
+- [`ssh-scanning-triage.md`](ssh-scanning-triage.md) — checking an exposed host for scan / brute-force activity
 - [`../network/`](../network/) — general DNS / networking reference

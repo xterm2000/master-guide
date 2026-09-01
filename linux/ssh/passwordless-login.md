@@ -180,6 +180,11 @@ scanned continuously. Add:
 - **Patch automatically** (`dnf-automatic`) since it's exposed.
 - A **non-standard port** (2222 etc.) reduces log volume only — it is not a
   security control.
+- **Don't port-forward other services** (databases especially) — keep them on
+  `localhost` and tunnel them through SSH: [`port-forwarding.md`](port-forwarding.md).
+- **Check periodically whether anything got in.** Failed attempts are
+  guaranteed background noise; what matters is whether any login *succeeded* and
+  whether password auth is really off: [`ssh-scanning-triage.md`](ssh-scanning-triage.md).
 
 ## 6. Alternative: CA-signed certificate instead of `authorized_keys`
 
@@ -360,5 +365,8 @@ public IP keeps changing — see
 - [`ssh-config.md`](ssh-config.md) — `~/.ssh/config` client options
 - [`dynamic-ip-access.md`](dynamic-ip-access.md) — reaching a host whose public IP keeps changing (DDNS, mesh VPN)
 - [`ssh-ca.md`](ssh-ca.md) — CA-signed certificates instead of per-host `authorized_keys` entries
+- [`port-forwarding.md`](port-forwarding.md) — tunnelling services instead of exposing their ports
+- [`ssh-scanning-triage.md`](ssh-scanning-triage.md) — checking an exposed host for scan / brute-force activity
+- [`restricted-networks.md`](restricted-networks.md) — connecting out when the network blocks or intercepts SSH
 - [`passwordless-sudo.md`](passwordless-sudo.md) — removing the *sudo* password prompt (separate topic)
 - [`windows-key-permissions.md`](windows-key-permissions.md) — locking down the private key on a Windows client
