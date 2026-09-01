@@ -14,6 +14,10 @@ self-descriptive; open the file for detail.
 | `sysadmin/` | LVM/storage concepts + disk resize, ACLs, WSL setup, user/group administration, firewalld, cron/at/systemd timers (`scheduling.md`), boot process & systemd, SELinux, install reference for tools used across this repo (`installations.md`), system-wide shared SDKMAN setup (`sdkman-setup.md`) |
 | `version-control/` | SVN → Git comparison |
 
+## Glossary
+
+- [`ssh/GLOSSARY.md`](ssh/GLOSSARY.md) — SSH vocabulary (keys, CA, forwarding, reaching a host). Repo-wide terms: [root `GLOSSARY.md`](../GLOSSARY.md).
+
 ## See Also
 
 - [`../git/`](../git/) — git command guide, merge strategies, local-dev workflow (separate top-level dir, not nested under `linux/`)

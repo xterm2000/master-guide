@@ -20,6 +20,9 @@ you need.
 
 ## Cross-cutting notes
 
+- **[`GLOSSARY.md`](GLOSSARY.md)** — initialisms and jargon used across the repo,
+  each linked to the doc that explains it. SSH has a deeper one at
+  [`linux/ssh/GLOSSARY.md`](linux/ssh/GLOSSARY.md).
 - **Lab topology:** AWS-hosted K8s cluster — 1 Bastion (public) + 1 Control Plane
   + 1 Worker (private), NLB on 80/443/6443. Infra in `aws/`, cluster ops in `k8s/`.
 - **TLS:** cert-manager + Let's Encrypt DNS-01 via Route53 (HTTP-01 doesn't work
