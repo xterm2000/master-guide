@@ -7,7 +7,7 @@ them into the questions you actually ask ("is it DNS or the route?").
 
 Verified on Rocky Linux 10.2: iproute2 6.17.0 (`ip`, `ss`, `bridge`, `tc`,
 `nstat`), BIND `dig` 9.18.33 / `host` / `nslookup`, iputils (`ping`, `arping`,
-`tracepath`), nmap 7.92 (`nmap`, `ncat`), curl 8.12.1, wget 1.x, OpenSSL 3.5.5,
+`tracepath`), nmap 7.92 (`nmap`, `ncat`), curl 8.12.1, wget 1.24.5, OpenSSL 3.5.5,
 ethtool 6.15, NetworkManager 1.56 (`nmcli`), nftables 1.1.5, iptables 1.8.11
 (nf_tables backend), systemd 257 (`resolvectl`).
 
@@ -79,7 +79,7 @@ which explains what each part is for.
 | **Where** the time goes (DNS vs connect vs TLS vs TTFB) | `curl -w` timing template | [curl](#curl) |
 | Test one backend IP without touching DNS | `curl --resolve <host>:<port>:<ip> <url>` | [curl](#curl) |
 | Inspect the served TLS cert / chain / expiry | `openssl s_client -connect <host>:443 -servername <host>` | [openssl s_client](#openssl-s_client) |
-| Reachability only, no body download | `wget -qO- --spider <url>` | [wget](#wget) |
+| Reachability only, no body download | `wget -q --spider <url>` | [wget](#wget) |
 
 ### What's listening / who owns a port
 
@@ -387,7 +387,7 @@ a specific, fixable statement.
 ## wget
 
 ```bash
-wget -qO- --spider https://example.com      # exit 0 if reachable, no download
+wget -q --spider https://example.com        # exit 0 if reachable, no download
 wget -qO- https://example.com | head        # body to stdout
 wget --server-response --spider https://example.com  # show response headers
 ```

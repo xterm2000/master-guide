@@ -1,9 +1,11 @@
+# `ssh-agent` & `ssh-add`
+
 `ssh-agent` is a small background daemon that holds your **decrypted** private
 keys in memory and does the signing for every SSH client you run, so you type a
 key's passphrase once per session instead of once per connection. `ssh-add`
 is the command that loads, lists, and removes keys from it.
 
-*Commands verified against OpenSSH_9.9p1 (the version on this box).*
+Verified on Rocky Linux 10.2, OpenSSH_9.9p1.
 
 ---
 
@@ -37,7 +39,7 @@ shows as `ssh-ed25519-cert-v01@openssh.com`.
 |---|---|
 | Stop typing a key passphrase on every `ssh` / `git push` | Keep a passphrase on the key (good practice), unlock it once per boot |
 | Reach a private host *through* a bastion without putting keys on the bastion | Agent forwarding, or better, `ProxyJump` (below) |
-| Use a CA private key to sign certs without decrypting the file each time | `ssh-add ~/.ssh/ca_user_key`, then `ssh-keygen -Us …` / `ssh-keygen -Y sign` — see [`ssh-ca.md`](ssh-ca.md) §"CA key held in ssh-agent" |
+| Use a CA private key to sign certs without decrypting the file each time | `ssh-add ~/.ssh/ca_user_key`, then `ssh-keygen -Us …` / `ssh-keygen -Y sign` — see [`ssh-ca.md`](ssh-ca.md) §3 (`-U` — CA key held in ssh-agent) |
 | Offer a CA-signed cert to hosts with no per-host `~/.ssh/config` block | Agent auto-offers every loaded identity — see [`passwordless-login.md`](passwordless-login.md) §6 |
 | Hardware-backed keys (FIDO / smartcard) | `ssh-add -K` (resident FIDO keys), `ssh-add -s <pkcs11.so>` (smartcard) |
 

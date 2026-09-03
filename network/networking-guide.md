@@ -11,6 +11,9 @@ This doc stays conceptual. For the commands, see
 scripts). Terms in **bold** on first use are collected in
 [`../GLOSSARY.md`](../GLOSSARY.md) § Networking.
 
+Verified on Rocky Linux 10.2; the commands in §6 are the same ones
+[`net-tools.md`](net-tools.md) pins tool versions for.
+
 Example addresses throughout use the RFC 5737 documentation blocks
 (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) for "public" and RFC 1918
 (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) for "private". MAC addresses

@@ -1,5 +1,10 @@
 # curl guide — text & logs
 
+`curl` is the API/diagnostics client: custom methods, headers, auth, `-w`
+timing. For unattended downloads, resume/retry, recursive mirrors and batch
+URL lists use [`wget.md`](wget.md) instead — it carries the
+[wget vs curl](wget.md#wget-vs-curl) table.
+
 ## Syntax
 
 ```

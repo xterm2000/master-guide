@@ -14,4 +14,4 @@ comparison, local-dev branching workflow, and config scope rules.
 
 ## See Also
 
-- [`../linux/version-control/svn-git-comparison.md`](../linux/version-control/svn-git-comparison.md) — SVN → Git mental-model comparison, for anyone coming from centralized VCS
+- [`svn-git-comparison.md`](svn-git-comparison.md) — SVN → Git mental-model comparison, for anyone coming from centralized VCS

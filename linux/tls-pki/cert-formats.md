@@ -5,7 +5,7 @@ relates to (and differs from) SSH keys. This is the "what am I holding and why"
 companion to [`openssl-pki.md`](openssl-pki.md) (which builds a CA) and
 [`ssl-server-key-checks.md`](ssl-server-key-checks.md) (which inspects certs).
 
-*Commands verified against OpenSSL 3.5.5 (the version on this box).*
+Verified on Rocky Linux 10.2, OpenSSL 3.5.5.
 
 ---
 
