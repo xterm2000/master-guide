@@ -3,7 +3,8 @@
 Infrastructure, Kubernetes, CI/CD, networking, and Linux operations — runbooks,
 manifests, and configuration references. This is a map, not a summary: each
 directory has its own `README.md` with the actual index; open the directory
-you need.
+you need. For a flat, file-level catalogue of every document in the repo, see
+[`index.md`](index.md).
 
 ## Directories
 
@@ -17,9 +18,13 @@ you need.
 | `git/` | Git guide, merge strategies, local-dev workflow, config scopes | [`git/README.md`](git/README.md) |
 | `ai-generic/` | Claude Code reference docs, Ollama setup | [`ai-generic/README.md`](ai-generic/README.md) |
 | `scripts/` | Repo-maintenance tooling (link checker) | [`scripts/README.md`](scripts/README.md) |
+| `oracle/` | Oracle DB — lock-contention playbook, DBA/trace/scheduler queries, PL/SQL collections & cursors | — (see [`index.md`](index.md#oracle--oracle-db-reference)) |
+| `powershell/` | PowerShell commands ↔ aliases ↔ bash equivalents, `ripgrep.ps1` | — (see [`index.md`](index.md#powershell)) |
 
 ## Cross-cutting notes
 
+- **[`index.md`](index.md)** — every `.md` in the repo, one line each, grouped by
+  directory; use it when you know the topic but not the directory.
 - **[`GLOSSARY.md`](GLOSSARY.md)** — initialisms and jargon used across the repo,
   each linked to the doc that explains it. SSH has a deeper one at
   [`linux/ssh/GLOSSARY.md`](linux/ssh/GLOSSARY.md).

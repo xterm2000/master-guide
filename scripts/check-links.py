@@ -4,6 +4,8 @@
 Two checks, both mirroring real gaps found by hand during a manual audit:
 
 1. Markdown links `[text](path)` — resolved relative to the file they're in.
+   Angle-bracket (`<path with spaces.md>`) and percent-encoded targets are
+   normalised first.
 2. Backtick paths rooted at a top-level repo directory, e.g. `linux/foo/bar.md`
    — resolved relative to the repo root. Supports a trailing `*` glob.
 
@@ -21,9 +23,11 @@ import glob
 import os
 import re
 import sys
+from urllib.parse import unquote
 
 TOP_LEVEL_DIRS = (
     "linux", "k8s", "git", "network", "docker-cicd", "aws", "ai-generic",
+    "oracle", "powershell", "scripts",
 )
 
 MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -49,7 +53,13 @@ def check_file(path, repo_root):
     for target in MD_LINK_RE.findall(content):
         if target.startswith(("http://", "https://", "mailto:", "#")):
             continue
-        clean = target.split("#", 1)[0]
+        # A link target may be wrapped in <> (the markdown escape for spaces in
+        # a path) and/or percent-encoded — normalise both before resolving.
+        if target.startswith("<") and target.endswith(">"):
+            target_path = target[1:-1]
+        else:
+            target_path = unquote(target)
+        clean = target_path.split("#", 1)[0]
         if not clean:
             continue
         resolved = os.path.normpath(os.path.join(file_dir, clean))
