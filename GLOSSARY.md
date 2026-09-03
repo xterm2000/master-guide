@@ -22,9 +22,11 @@ SSH has its own deeper glossary: [`linux/ssh/GLOSSARY.md`](linux/ssh/GLOSSARY.md
 | **mTLS** | Mutual TLS — both ends present a cert, so the server authenticates the client too. | [`linux/tls-pki/openssl-pki.md`](linux/tls-pki/openssl-pki.md) §12 |
 | **SAN** | Subject Alternative Name — the cert field listing the hostnames/IPs it's actually valid for (the CN is legacy). | [`linux/tls-pki/ssl-server-key-checks.md`](linux/tls-pki/ssl-server-key-checks.md) §6 |
 | **key usage / extended key usage** | Cert extensions that constrain what a key may do (`keyCertSign`, `digitalSignature`, `serverAuth`, …). | [`linux/tls-pki/openssl-pki.md`](linux/tls-pki/openssl-pki.md) §6 |
-| **PEM / DER** | Cert/key encodings — PEM is Base64 text with `-----BEGIN …-----` headers; DER is the raw binary. | [`linux/tls-pki/openssl-pki.md`](linux/tls-pki/openssl-pki.md) §1 |
-| **PKCS#12** (`.p12` / `.pfx`) | A binary bundle of cert + private key + optional chain, e.g. for import into Windows/browsers. | [`linux/tls-pki/openssl-pki.md`](linux/tls-pki/openssl-pki.md) §1 |
-| **PKCS#7** (`.p7b`) | A cert-chain bundle with no private key. | [`linux/tls-pki/openssl-pki.md`](linux/tls-pki/openssl-pki.md) §1 |
+| **PEM / DER** | Cert/key encodings — DER is the raw binary (ASN.1 TLV) that gets signed; PEM is Base64 of that DER, wrapped in `-----BEGIN …-----` headers, and blocks concatenate. | [`linux/tls-pki/cert-formats.md`](linux/tls-pki/cert-formats.md) |
+| **PKCS#12** (`.p12` / `.pfx`) | A binary bundle of cert + private key + optional chain, e.g. for import into Windows/browsers. | [`linux/tls-pki/cert-formats.md`](linux/tls-pki/cert-formats.md) §5 |
+| **PKCS#7** (`.p7b`) | A cert-chain bundle with no private key. | [`linux/tls-pki/cert-formats.md`](linux/tls-pki/cert-formats.md) §5 |
+| **PKCS#1 / PKCS#8** | Private-key layouts — PKCS#1 is the legacy RSA-only `-----BEGIN RSA PRIVATE KEY-----`; PKCS#8 is `-----BEGIN PRIVATE KEY-----`, algorithm-agnostic, the OpenSSL 3.x default. | [`linux/tls-pki/cert-formats.md`](linux/tls-pki/cert-formats.md) §5 |
+| **X.509 / ASN.1** | X.509 is the TLS certificate data model (issuer/subject/validity/extensions); ASN.1 is the schema language it's written in, from the X.500 directory standards. SSH certs are **not** X.509. | [`linux/tls-pki/cert-formats.md`](linux/tls-pki/cert-formats.md) §2 |
 | **RSA / EC / EdDSA / Ed25519 / Curve25519** | Asymmetric algorithms. Ed25519 (sign/verify) and Curve25519 / X25519 (key agreement) are the modern ECC default pair. | [`linux/tls-pki/openssl-pki.md`](linux/tls-pki/openssl-pki.md) §2 |
 
 ## Certificate automation (Kubernetes)

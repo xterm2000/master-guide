@@ -273,6 +273,10 @@ offline, or console access) and re-sign a few weeks before expiry, not after.
 
 ### Using the cert without per-host config (ssh-agent)
 
+> For the agent itself — `ssh-add` flags, key lifetimes, `systemd --user`, agent
+> forwarding vs `ProxyJump` — see [`ssh-agent.md`](ssh-agent.md). This section
+> only covers how the agent gets a CA cert offered with no per-host config.
+
 `ssh` **always** attaches `<key>-cert.pub` automatically when it uses `<key>`,
 as long as the two files share a basename and directory (`id_shiva` +
 `id_shiva-cert.pub`). So the cert is never the thing you have to wire up — the

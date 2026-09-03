@@ -4,8 +4,9 @@ A way to mint many SSH identities (user or host) from one root of trust,
 instead of distributing individual public keys to every `authorized_keys`
 or `known_hosts` file. Distinct from the x.509/TLS PKI in
 [`../tls-pki/openssl-pki.md`](../tls-pki/openssl-pki.md) — SSH certificates
-are a separate OpenSSH-native mechanism, not X.509. See that file's
-comparison table if you're coming from the TLS side.
+are a separate OpenSSH-native mechanism, not X.509.
+[`../tls-pki/cert-formats.md`](../tls-pki/cert-formats.md) §1 lays out why the
+two ecosystems have entirely different formats and trust models.
 
 All commands here were run and verified on this machine
 (`ssh -V` → OpenSSH, see `linux/tls-pki/` sibling doc for the TLS equivalent

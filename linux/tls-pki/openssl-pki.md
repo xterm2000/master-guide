@@ -31,6 +31,11 @@ MIIEpAIBAAKCAQEA3Tz2mr7SZiAMfQyuvBjM9Oi...
 -----END RSA PRIVATE KEY-----
 ```
 
+That header is **PKCS#1** (legacy, RSA-only). OpenSSL 3.x actually writes
+**PKCS#8** — `-----BEGIN PRIVATE KEY-----`, algorithm-agnostic — by default, so
+your real output will usually differ. See
+[`cert-formats.md`](cert-formats.md) §5 for the full format map.
+
 Protect this file. File permissions `400`, passphrase encryption (`-aes256`), or a hardware security module (HSM).
 
 ### Certificate (`.crt` / `.pem`)
@@ -101,6 +106,9 @@ The private key never leaves your machine. Together the cert and key let your se
 | `.der` | Binary | Certificate or key in raw DER encoding |
 | `.p12` / `.pfx` | Binary | PKCS#12 bundle: certificate + private key + optional chain |
 | `.p7b` / `.p7c` | PEM or DER | PKCS#7 certificate chain (no private key) |
+
+For what PEM / DER / X.509 / the PKCS numbers actually *are*, how they layer, and
+conversion recipes, see [`cert-formats.md`](cert-formats.md).
 
 ### The three OpenSSL subcommands you use most
 

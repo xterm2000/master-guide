@@ -13,7 +13,10 @@ are in the [root `GLOSSARY.md`](../../GLOSSARY.md).
 | **host key** | The server's own identity keypair (`/etc/ssh/ssh_host_*_key`) — what it presents to prove itself; what a client records in `known_hosts`. | [`ssh-ca.md`](ssh-ca.md) §9 |
 | **`sshd_config` / `ssh_config`** | System-wide server rulebook / client defaults, in `/etc/ssh/`. `~/.ssh/config` overrides the client side per-user. | [`passwordless-login.md`](passwordless-login.md), [`ssh-config.md`](ssh-config.md) |
 | **drop-in file** | A `*.conf` fragment in `/etc/ssh/sshd_config.d/`. On RHEL/Rocky it's `Include`d at the top, so "first obtained value wins" — a drop-in beats the defaults below it. | [`passwordless-login.md`](passwordless-login.md) §5 |
-| **`ssh-agent`** | Per-session (Linux) or persistent (Windows) daemon that holds unlocked private keys — and their adjacent `*-cert.pub` certs — in memory. | [`passwordless-login.md`](passwordless-login.md) §6 |
+| **`ssh-agent`** | Per-session (Linux) or persistent (Windows) daemon that holds unlocked private keys — and their adjacent `*-cert.pub` certs — in memory, and signs auth challenges so the key never leaves it. | [`ssh-agent.md`](ssh-agent.md) |
+| **`ssh-add`** | Command that loads / lists (`-l`, `-L`) / removes (`-d`, `-D`) keys in the agent; `-t` sets a lifetime, `-c` requires per-use confirmation. | [`ssh-agent.md`](ssh-agent.md) |
+| **`SSH_AUTH_SOCK`** | Env var holding the path of the agent's Unix-domain socket — how every SSH client finds the agent. `IdentityAgent` overrides it per-host. | [`ssh-agent.md`](ssh-agent.md) |
+| **agent forwarding** (`ForwardAgent` / `-A`) | Exposes your local agent's socket on a remote host so a second hop authenticates with your keys. Root on that host can then sign as you — prefer `ProxyJump`. | [`ssh-agent.md`](ssh-agent.md) |
 
 ## Authentication
 
@@ -21,7 +24,7 @@ are in the [root `GLOSSARY.md`](../../GLOSSARY.md).
 |------|---------|-----|
 | **passphrase vs password** | A *passphrase* unlocks a private key locally and is never sent; a *password* is authentication to the server. Key auth sends neither over the wire. | [`passwordless-login.md`](passwordless-login.md) |
 | **`PasswordAuthentication` / `PubkeyAuthentication` / `KbdInteractiveAuthentication` / `GSSAPIAuthentication`** | Independent on/off toggles — enabling one never disables another; each unwanted method must be closed explicitly. | [`passwordless-login.md`](passwordless-login.md) §5 |
-| **`MaxAuthTries`** | Server-side cap (default 6) on auth attempts per connection. A large agent can exhaust it before the right key is tried. | [`passwordless-login.md`](passwordless-login.md) §6 |
+| **`MaxAuthTries`** | Server-side cap (default 6) on auth attempts per connection. A large agent can exhaust it before the right key is tried. | [`passwordless-login.md`](passwordless-login.md) §6, [`ssh-agent.md`](ssh-agent.md) |
 | **fingerprint** | A SHA256 hash identifying a key; the thing to compare out-of-band. Short key IDs are collidable — use the fingerprint. | [`ssh-ca.md`](ssh-ca.md) §8 |
 | **TOFU** (Trust On First Use) | Accepting an unverified host key on first connect — the "authenticity of host … can't be established" prompt. A host CA removes it. | [`ssh-ca.md`](ssh-ca.md) §1 |
 

@@ -283,3 +283,10 @@ done
 | `-checkemail <addr>` | Validate email against cert |
 | `-showcerts` | Show full chain in `s_client` |
 | `-CAfile <path>` | Specify CA bundle for verification |
+
+---
+
+## See Also
+
+- [`cert-formats.md`](cert-formats.md) — what PEM / DER / X.509 / PKCS#7 / PKCS#12 are, and how to convert between them
+- [`openssl-pki.md`](openssl-pki.md) — build a CA and issue certs
