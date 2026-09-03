@@ -23,3 +23,12 @@ A personal DevOps/sysadmin reference repo, built around a Kubernetes lab cluster
 
 - For large or iterative fetches from any source (web pages, API responses, command output, etc.), dump to a file first, then read/query the file — don't pull it directly into the conversation.
 - When verifying multiple related bash commands (e.g. checking several flags/man pages before documenting them), write one script that runs them all and logs output (and exit codes) to a file, then run it once and read the log — rather than issuing many separate Bash calls.
+
+## Common Gotchas
+
+1. **`README.md` (root first, then the relevant directory's) is the source of truth** for structure and the real index — read it before exploring, and update it in the same change as any doc edit.
+2. **Every command in a guide is verified against the locally installed tool version**, with the tested version noted in the guide.
+3. **New guides match the sibling guide's conventions** — passphrase names, sample users, section ordering, index entry. Read one sibling first, once.
+4. **Keep a guide a single file** unless explicitly asked for a split.
+5. **This is a reference/learning repo, not production** — the AWS/K8s lab manifests are illustrative implementations, not a deployable system.
+6. **Directory `README.md`s carry the load-bearing gotchas** (immutable fields, silent failure modes) — surface those when editing near the topic.
