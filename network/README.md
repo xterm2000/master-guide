@@ -6,6 +6,7 @@ checks. SSH connection config and node-connect scripts live in
 
 | Topic | File |
 |-------|------|
+| Small network-tool reference — `ip`/`ss`/`dig`/`getent`/`nc`/`nmap`/`curl`/`openssl s_client`/`tracepath`/`arping`/`nstat`/`ethtool`/`nmcli` etc., with a "which tool do I need" dispatch table + diagnostic recipes | `net-tools.md` |
 | kubelet DNS failure diagnosis (CoreDNS, resolv.conf, common failure modes) | `kubelet-DNS-error.md` |
 | iptables reference + explainer script | `iptab.md`, `iptab-explain.sh` |
 | General network diagnostics (routes, DNS resolution, connectivity) | `net-check.md` |

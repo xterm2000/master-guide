@@ -748,3 +748,4 @@ Without `sponge`: `grep x file > tmp && mv tmp file`, or `sed -i`.
 - [`grep.md`](grep.md), [`grep-regex-ref.md`](grep-regex-ref.md) — searching and regex
 - [`../shell/bash-loops-cookbook.md`](../shell/bash-loops-cookbook.md) — `seq` / `shuf` / `xargs` feeding shell loops
 - [`../../git/`](../../git/) — use `git diff` / `git apply` for anything version-controlled
+- [`../../network/net-tools.md`](../../network/net-tools.md) — the networking-side sibling of this doc (`ip`/`ss`/`dig`/`nc`/`curl` dispatch table + recipes)

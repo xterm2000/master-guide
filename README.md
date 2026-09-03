@@ -12,7 +12,7 @@ you need.
 | `aws/` | CloudFormation lab infra, cluster lifecycle scripts | [`aws/README.md`](aws/README.md) |
 | `k8s/` | Cluster setup, debugging, ingress/routing, TLS/PKI, observability, example manifests | [`k8s/README.md`](k8s/README.md) |
 | `docker-cicd/` | Docker-based CI/CD home lab (Jenkins/Gitea/Nexus/Traefik/Pi-hole) | [`docker-cicd/README.md`](docker-cicd/README.md) |
-| `network/` | DNS, iptables, general connectivity diagnostics | [`network/README.md`](network/README.md) |
+| `network/` | Small network-tool reference + dispatch table, DNS, iptables, general connectivity diagnostics | [`network/README.md`](network/README.md) |
 | `linux/` | Sysadmin commands, text processing, shell, SSH, TLS/PKI reference, LVM/ACLs/etc. | [`linux/README.md`](linux/README.md) |
 | `git/` | Git guide, merge strategies, local-dev workflow, config scopes | [`git/README.md`](git/README.md) |
 | `ai-generic/` | Claude Code reference docs, Ollama setup | [`ai-generic/README.md`](ai-generic/README.md) |
