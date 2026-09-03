@@ -64,8 +64,24 @@ SSH has its own deeper glossary: [`linux/ssh/GLOSSARY.md`](linux/ssh/GLOSSARY.md
 
 | Term | Meaning | See |
 |------|---------|-----|
-| **NAT** | Network Address Translation — rewriting source/destination addresses at a boundary, e.g. a home router sharing one public IP. | [`network/net-check.md`](network/net-check.md) |
-| **CGNAT** | Carrier-Grade NAT — the ISP itself NATs you, so you have no real public IP and nothing inbound works. | [`linux/ssh/dynamic-ip-access.md`](linux/ssh/dynamic-ip-access.md) |
+| **CIDR** | `10.1.2.0/24`-style notation — the `/N` is how many leading bits are the network; usable hosts = 2^(32−N) − 2. | [`network/networking-guide.md`](network/networking-guide.md) §1.2 |
+| **subnet** | A contiguous address block sharing one broadcast domain; hosts in it talk directly (ARP), anything else goes via a router. Subnetting = containing broadcast, creating routing/firewall boundaries, limiting blast radius. | [`network/networking-guide.md`](network/networking-guide.md) §1.2 |
+| **RFC 1918** | The private ranges `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` — not internet-routable; NAT to leave. | [`network/networking-guide.md`](network/networking-guide.md) §1.3 |
+| **default gateway** | The router a host sends anything not on its own subnet to; the `0.0.0.0/0` route. | [`network/networking-guide.md`](network/networking-guide.md) §1.4 |
+| **longest-prefix match** | Routing picks the most *specific* matching route (`/24` beats `/16` beats default `/0`). | [`network/networking-guide.md`](network/networking-guide.md) §2.2 |
+| **NAT** | Network Address Translation — rewriting source/destination addresses at a boundary, with connection tracking so replies un-rewrite. Not a firewall. | [`network/networking-guide.md`](network/networking-guide.md) §2.4 |
+| **SNAT / DNAT / PAT** | Source-NAT (masquerade — many hosts share one public IP outbound) / Destination-NAT (port-forward — expose an inside host) / Port Address Translation (track by port so many hosts fit one IP). | [`network/networking-guide.md`](network/networking-guide.md) §2.4 |
+| **CGNAT** | Carrier-Grade NAT — the ISP itself NATs you (`100.64.0.0/10`), so you have no real public IP and nothing inbound works. | [`linux/ssh/dynamic-ip-access.md`](linux/ssh/dynamic-ip-access.md), [`network/networking-guide.md`](network/networking-guide.md) §1.3 |
+| **DHCP** | The lease protocol that hands a booting client its address, gateway, DNS, search domains, often MTU/NTP. A `169.254.x.x` address = no DHCP answer. | [`network/networking-guide.md`](network/networking-guide.md) §2.5 |
+| **MTU / MSS / PMTU** | Max frame size a link carries (1500 classic Ethernet, less in tunnels) / max TCP payload negotiated from it / the smallest MTU along a path. A PMTU black hole = small requests work, large ones hang. | [`network/networking-guide.md`](network/networking-guide.md) §2.6 |
+| **VLAN** | A tag that carries many subnets over one physical link; a switch port is an *access* port (one VLAN, endpoint) or a *trunk* (many, tagged, between switches). | [`network/networking-guide.md`](network/networking-guide.md) §3.3 |
+| **DMZ** | A segment for internet-exposed hosts, firewalled off from the internal network which treats it as hostile. | [`network/networking-guide.md`](network/networking-guide.md) §3.2 |
+| **split-horizon DNS** | The same name resolving to different addresses inside vs outside (internal `10.x`, external public); also the fix for hairpin-NAT. | [`network/networking-guide.md`](network/networking-guide.md) §2.3 |
+| **SERVFAIL vs NXDOMAIN** | `NXDOMAIN` = authoritative "no such name"; `SERVFAIL` = the resolver broke trying (DNSSEC failure, dead forwarder, timeout). Different fixes. | [`network/networking-guide.md`](network/networking-guide.md) §2.3 |
+| **rp_filter** | Reverse-path filtering — the kernel drops a packet whose reply would leave via a different interface; breaks asymmetric routing. | [`network/networking-guide.md`](network/networking-guide.md) §6.2 |
+| **conntrack** | The kernel connection-tracking table behind NAT and stateful firewalling; when full, new connections drop intermittently. | [`network/networking-guide.md`](network/networking-guide.md) §2.4 |
+| **ZTNA** | Zero-Trust Network Access — granting access by authenticated user + device identity rather than by being on a privileged network; replaces "VPN in and you're trusted". | [`network/networking-guide.md`](network/networking-guide.md) §5.1 |
+| **VPC** | A cloud tenant's private address space (its CIDR); subnets pin to Availability Zones, route tables decide public vs private, Security Groups (stateful) and NACLs (stateless) filter. | [`network/networking-guide.md`](network/networking-guide.md) §3.4 |
 | **DDNS** | Dynamic DNS — a hostname kept pointed at a changing public IP by an updater. | [`linux/ssh/dynamic-ip-access.md`](linux/ssh/dynamic-ip-access.md) |
 | **DPI** | Deep Packet Inspection — filtering by protocol signature rather than port; can block SSH regardless of which port it's on. | [`linux/ssh/restricted-networks.md`](linux/ssh/restricted-networks.md) |
 | **DNS TTL** | How long resolvers cache a record; keep it low (60–300 s) for a record that tracks a moving IP. | [`linux/ssh/dynamic-ip-access.md`](linux/ssh/dynamic-ip-access.md) |

@@ -15,8 +15,20 @@ Firewall rule syntax has its own doc: [`iptab.md`](iptab.md) (+
 [`iptab-explain.sh`](iptab-explain.sh)). NAT / IP-forwarding lab checks:
 [`net-check.md`](net-check.md). This doc covers the diagnostic tools around them.
 
-All addresses, hostnames and MACs below are placeholders
-(`198.51.100.0/24`, `example.com`, `aa:bb:cc:...`) — RFC 5737 / RFC 2606.
+All addresses, hostnames and MACs below are placeholders (RFC 5737 / RFC 2606 /
+fictional MACs). Where an example needs a concrete host, it assumes:
+
+| Thing | Value |
+|---|---|
+| Interface | `ens160` |
+| This host | `10.1.2.50/24` on `10.1.2.0/24` |
+| Default gateway | `10.1.2.1` (the NAT router) |
+| DNS resolver | `10.1.2.1` |
+| Router's public address | `198.51.100.7` (outbound SNAT) |
+| Remote test target | `198.51.100.50`, `example.com` |
+
+Same topology as [`networking-guide.md`](networking-guide.md) § Example topology,
+which explains what each part is for.
 
 ---
 
@@ -120,7 +132,7 @@ ip addr show ens160             # full detail for one interface
 ip -s link show ens160          # + RX/TX packets, errors, drops, overruns
 ip -j addr | jq -r '.[].ifname' # scriptable
 
-ip addr add 198.51.100.9/24 dev ens160   # transient (gone on reboot / NM resync)
+ip addr add 10.1.2.60/24 dev ens160      # transient (gone on reboot / NM resync)
 ip link set ens160 mtu 1400              # transient
 ```
 
@@ -136,10 +148,10 @@ climbing → cable / driver / ring-buffer problem, not a routing problem.
 ```bash
 ip route                        # the main table
 ip route get 198.51.100.50      # EXACTLY which route+source IP this dest uses
-ip route get 198.51.100.50 from 192.0.2.7   # test a specific source
+ip route get 198.51.100.50 from 10.1.2.50   # test a specific source
 ip -j route | jq -r '.[] | select(.dst=="default") | .gateway'
 
-ip route add 10.10.0.0/16 via 198.51.100.1 dev ens160   # transient
+ip route add 10.9.0.0/16 via 10.1.2.1 dev ens160   # transient — reach another internal net
 ip rule                         # policy-routing rules (multi-table setups)
 ```
 
@@ -201,7 +213,7 @@ dig +noall +answer example.com         # answer section with TTLs, no cruft
 dig example.com A example.com AAAA      # multiple queries in one call
 
 dig @8.8.8.8 example.com                # ask a specific resolver
-dig @198.51.100.2 example.com           # e.g. the internal one directly
+dig @10.1.2.1 example.com               # e.g. the internal resolver directly
 
 dig +trace example.com                  # walk root -> TLD -> authoritative
 dig -x 198.51.100.4                      # reverse (PTR) lookup
@@ -264,13 +276,13 @@ nmcli dev show ens160 | grep -i dns     # what NM configured for the link
 ## ping
 
 ```bash
-ping -c4 198.51.100.1              # 4 packets then stop
-ping -c1 -W1 198.51.100.1          # 1 packet, 1s timeout — scriptable liveness
-ping -i 0.2 -c20 198.51.100.1      # faster interval (root for <0.2 in some builds)
-ping -D 198.51.100.1              # timestamp each line
+ping -c4 10.1.2.1                  # 4 packets then stop (here: the gateway)
+ping -c1 -W1 10.1.2.1             # 1 packet, 1s timeout — scriptable liveness
+ping -i 0.2 -c20 10.1.2.1          # faster interval (root for <0.2 in some builds)
+ping -D 10.1.2.1                  # timestamp each line
 
 # Path-MTU / VPN / tunnel MSS problems: largest payload that gets through undivided
-ping -M do -s 1472 -c1 198.51.100.1   # 1472 + 28 hdr = 1500; shrink until it passes
+ping -M do -s 1472 -c1 8.8.8.8        # 1472 + 28 hdr = 1500; shrink until it passes
 ```
 
 No reply ≠ down — many hosts and firewalls drop ICMP echo. Confirm with a TCP
@@ -283,7 +295,7 @@ check (`nc -z`) before concluding the host is offline.
 ```bash
 nc -zv -w2 example.com 443         # port open? -z = scan (no data), -v = report
 nc -zv -w2 example.com 20-25       # small range
-nc -zuv -w2 198.51.100.2 53        # UDP (less reliable — no handshake)
+nc -zuv -w2 10.1.2.1 53            # UDP (less reliable — no handshake)
 
 # talk to a service
 printf 'GET / HTTP/1.0\r\nHost: example.com\r\n\r\n' | ncat example.com 80
@@ -301,14 +313,14 @@ ncat -lvk --exec "/bin/cat" 9999   # echo server
 Host discovery and port scanning. (Also `network.md`'s subnet-sweep snippets.)
 
 ```bash
-nmap -sn 198.51.100.0/24                    # ping sweep, no port scan — live hosts
-nmap -sn 198.51.100.0/24 | grep report      # just the addresses
-nmap -sn 198.51.100.100-110                  # range
+nmap -sn 10.1.2.0/24                    # ping sweep, no port scan — live hosts
+nmap -sn 10.1.2.0/24 | grep report      # just the addresses
+nmap -sn 10.1.2.100-110                  # range
 
-nmap -Pn -p 22,80,443 198.51.100.4           # scan ports, skip host-discovery
-nmap -Pn -p- --min-rate 1000 198.51.100.4    # all 65535, faster
-nmap -sV -p 443 198.51.100.4                  # probe service/version banners
-nmap -sU -p 53,123,161 198.51.100.4          # UDP scan (slow, needs root)
+nmap -Pn -p 22,80,443 10.1.2.10           # scan ports, skip host-discovery
+nmap -Pn -p- --min-rate 1000 10.1.2.10    # all 65535, faster
+nmap -sV -p 443 10.1.2.10                  # probe service/version banners
+nmap -sU -p 53,123,161 10.1.2.1           # UDP scan (slow, needs root)
 ```
 
 `-Pn` matters on networks that block ping — without it nmap may skip a host it
@@ -337,7 +349,7 @@ ARP-level probe: proves L2 connectivity even when ICMP/IP is filtered. Good for
 IF=$(ip route show default | awk '{print $5; exit}')
 GW=$(ip route show default | awk '{print $3; exit}')
 arping -c3 -I "$IF" "$GW"          # unicast replies + MAC of the gateway
-arping -D -c2 -I "$IF" 198.51.100.9   # -D: is this address already in use?
+arping -D -c2 -I "$IF" 10.1.2.60      # -D: is this address already in use?
 ```
 
 ---
@@ -360,11 +372,11 @@ curl -sS -o /dev/null -w \
  https://example.com
 
 # test one backend without changing DNS / /etc/hosts
-curl -sS --resolve example.com:443:198.51.100.7 -o /dev/null -w '%{http_code}\n' https://example.com
+curl -sS --resolve example.com:443:198.51.100.50 -o /dev/null -w '%{http_code}\n' https://example.com
 
 curl -sS --connect-to ::proxy.internal: https://example.com   # route via a different host
 curl -4 ... / curl -6 ...                    # force address family
-curl --interface 192.0.2.7 https://example.com  # force source IP
+curl --interface 10.1.2.50 https://example.com  # force source IP
 curl -x http://proxy:3128 https://example.com   # via HTTP proxy
 curl --socks5-hostname localhost:1080 https://example.com   # via SSH -D SOCKS
 ```
@@ -380,7 +392,8 @@ wget -qO- https://example.com | head        # body to stdout
 wget --server-response --spider https://example.com  # show response headers
 ```
 
-Use `curl` for diagnostics; `wget` shines for recursive/retry downloads.
+Use `curl` for diagnostics; `wget` shines for recursive/retry downloads —
+full reference in [`../linux/text-processing/wget.md`](../linux/text-processing/wget.md).
 
 ## openssl s_client
 
@@ -421,7 +434,7 @@ ss -tnp '( dport = :443 or sport = :443 )'
 ss -tn state established '( dport = :443 )'
 ss -tn state time-wait
 ss -tnp 'dst 198.51.100.0/24'
-ss -ti dst 198.51.100.7           # -i: per-socket TCP info (rtt, cwnd, retrans)
+ss -ti dst 198.51.100.50          # -i: per-socket TCP info (rtt, cwnd, retrans)
 ```
 
 `ss -ti` retransmit / rtt fields expose a lossy or congested path on an
@@ -435,7 +448,7 @@ Alternative angle — from the process side.
 sudo ss -tulpn | grep :11434      # usual first check
 sudo lsof -i :11434               # every process with a socket on that port
 sudo lsof -i tcp:11434 -sTCP:LISTEN
-sudo lsof -i @198.51.100.7        # connections to/from a host
+sudo lsof -i @198.51.100.50       # connections to/from a host
 sudo fuser 11434/tcp              # just the PID(s); fuser -k 11434/tcp kills them
 ```
 
@@ -531,9 +544,9 @@ nmcli dev show ens160                     # IP4/IP6 addresses, gateway, DNS, rou
 nmcli con show ens160                     # every setting on the profile
 
 # persistent edits (then bounce the connection)
-nmcli con mod ens160 ipv4.dns "198.51.100.2 8.8.8.8"
-nmcli con mod ens160 +ipv4.routes "10.10.0.0/16 198.51.100.1"
-nmcli con mod ens160 ipv4.addresses 192.0.2.7/24 ipv4.gateway 192.0.2.1 ipv4.method manual
+nmcli con mod ens160 ipv4.dns "10.1.2.1 8.8.8.8"
+nmcli con mod ens160 +ipv4.routes "10.9.0.0/16 10.1.2.1"
+nmcli con mod ens160 ipv4.addresses 10.1.2.50/24 ipv4.gateway 10.1.2.1 ipv4.method manual
 nmcli con up ens160                       # apply
 ```
 
@@ -547,16 +560,16 @@ check when `resolvectl` isn't available.
 Physical / driver-level link info and counters.
 
 ```bash
-ethtool -i ens160                 # driver + version (here: vmxnet3 — a VM NIC)
-ethtool ens160                    # link speed, duplex, auto-neg, link detected
+ethtool -i ens160                 # driver + version (e.g. e1000e, ixgbe, virtio_net, vmxnet3)
+ethtool ens160                    # link speed, duplex, auto-neg, "Link detected"
 ethtool -S ens160                 # driver stats: rx/tx errors, drops, no-buffer
 ethtool -g ens160                 # ring buffer sizes (raise on high-throughput drops)
 ethtool -k ens160                 # offload features (GRO/GSO/TSO/checksum)
 ```
 
-On a physical host `Speed:`/`Duplex:` mismatches explain slow links;
-`ethtool -S` drop counters explain packet loss under load. On this VM the NIC is
-`vmxnet3`, so speed is virtual.
+On a physical host `Speed:` / `Duplex:` mismatches explain slow links, and
+`ethtool -S` drop counters explain packet loss under load. On a virtualised NIC
+(`virtio_net`, `vmxnet3`, …) the reported speed is synthetic — ignore it.
 
 ---
 
@@ -570,7 +583,7 @@ On a physical host `Speed:`/`Duplex:` mismatches explain slow links;
 | `socat` | `socat` | `nc` on steroids: bidirectional relays between any two of TCP/UDP/UNIX/PTY/FILE/SSL |
 | `iperf3` | `iperf3` | throughput benchmark between two hosts (`iperf3 -s` / `iperf3 -c host`) |
 | `conntrack` | `conntrack-tools` | list/flush the kernel NAT/connection-tracking table (`conntrack -L`) — vital for NAT debugging |
-| `fping` | `fping` | fast parallel ping sweep (`fping -a -g 198.51.100.0/24`) — used in `network.md` |
+| `fping` | `fping` | fast parallel ping sweep (`fping -a -g 10.1.2.0/24`) — used in `network.md` |
 | `nethogs` | `nethogs` | bandwidth **per process** |
 | `iftop` / `nload` / `bmon` | resp. | bandwidth per connection / per interface, live |
 | `whois` | `whois` | registration / netblock ownership for a public IP or domain |
@@ -623,7 +636,7 @@ echo | openssl s_client -connect example.com:443 -servername example.com -showce
 ### Compare resolution across two resolvers
 
 ```bash
-diff <(dig +short example.com @198.51.100.2) <(dig +short example.com @8.8.8.8)
+diff <(dig +short example.com @10.1.2.1) <(dig +short example.com @8.8.8.8)
 ```
 
 Different answers → split-horizon DNS or a stale/poisoned cache on one side.
@@ -637,8 +650,8 @@ sudo ss -tulpnH "sport = :8080" || sudo lsof -i :8080
 ### Find live hosts on a subnet, then scan one
 
 ```bash
-nmap -sn 198.51.100.0/24 | awk '/report for/{print $NF}'
-nmap -Pn -p 22,80,443,6443 198.51.100.42
+nmap -sn 10.1.2.0/24 | awk '/report for/{print $NF}'
+nmap -Pn -p 22,80,443,6443 10.1.2.10
 ```
 
 ### Is the path MTU smaller than 1500? (VPN / tunnel hangs)
