@@ -119,6 +119,7 @@ Also here: `docker-compose.yaml`, `jenkins/Dockerfile`, `pg-init-scripts/*.sql`,
 | [`arrays.md`](linux/shell/arrays.md) | Bash arrays, indexed and associative |
 | [`bash-loops-cookbook.md`](linux/shell/bash-loops-cookbook.md) | Loop patterns |
 | [`bash-history-expansion.md`](linux/shell/bash-history-expansion.md) | `!!`/`!$` history expansion, `compgen -v` introspection |
+| [`bash-history-config.md`](linux/shell/bash-history-config.md) | Controlling what gets saved — `HISTCONTROL`/`HISTIGNORE`/`HISTSIZE`/`histappend`, pruning with `history -d`, curated snippet file |
 | [`heredocs.md`](linux/shell/heredocs.md) | Heredocs and here-strings |
 | [`process-substitution.md`](linux/shell/process-substitution.md) | `<(...)` vs `$(...)` vs a pipe |
 | [`linux-aliases.md`](linux/shell/linux-aliases.md) | Alias definitions worth keeping |
