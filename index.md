@@ -108,6 +108,7 @@ Also here: `docker-compose.yaml`, `jenkins/Dockerfile`, `pg-init-scripts/*.sql`,
 | [`wget.md`](linux/text-processing/wget.md) | `wget` — unattended downloads, resume/retry, mirroring, batch lists, wget vs curl |
 | [`jq-detailed.md`](linux/text-processing/jq-detailed.md) | `jq` reference |
 | [`yq-jq-bat.md`](linux/text-processing/yq-jq-bat.md) | `yq` / `jq` / `bat` / `icdiff` — install and use |
+| [`ripgrep.md`](linux/text-processing/ripgrep.md) | `ripgrep` (`rg`) full reference — flags, filtering, regex notes, `grep` translation table |
 | [`ripgrep-example.md`](linux/text-processing/ripgrep-example.md) | A ripgrep glob command taken apart piece by piece |
 | [`ripgrep-glob-and-sort.md`](linux/text-processing/ripgrep-glob-and-sort.md) | Glob precedence, anchoring, and sort performance |
 | [`tty-colors.md`](linux/text-processing/tty-colors.md) | ANSI escapes, and why colour dies in a pipe |
